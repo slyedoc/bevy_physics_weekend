@@ -1,0 +1,17 @@
+[package]
+name = "bevy_physics_weekend"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bevy = { version = "0.6.0", default-features = false, features = [
+    "bevy_render",
+] }
+
+[dev-dependencies]
+bevy = { version = "0.6.0", default-features = true }
+
+[patch.crates-io]
+bevy = { git = "https://github.com/bevyengine/bevy", branch = "main" }
