@@ -9,6 +9,8 @@ pub struct Body {
     pub linear_velocity: Vec3,
     pub inv_mass: f32,
     pub shape: PyhsicsShape,
+    #[inspectable(min = 0.0, max = 1.0)]
+    pub elasticity: f32,
 }
 
 impl Default for Body {
@@ -17,6 +19,7 @@ impl Default for Body {
             linear_velocity: Vec3::default(),
             inv_mass: 1.0,
             shape: PyhsicsShape::default(),
+            elasticity: 1.0,
         }
     }
 }

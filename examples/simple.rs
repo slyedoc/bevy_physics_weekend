@@ -6,7 +6,6 @@ use bevy_inspector_egui::WorldInspectorPlugin;
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        
         .add_plugin(WorldInspectorPlugin::default())
         .add_plugin(PhysicsPlugin) // has to be after inspector plugin
         .add_plugin(helper::CameraControllerPlugin)
@@ -33,9 +32,10 @@ fn setup(
         ..Default::default()
     })
         .insert(Body {
-            linear_velocity: Vec3::ZERO,
             inv_mass: 1.0,
             shape: PyhsicsShape::Sphere{ radius: sphere_radius },
+            elasticity: 0.5,
+            ..Default::default()
         })
         .insert(Name::new("Sphere"));
 
@@ -52,9 +52,9 @@ fn setup(
         ..Default::default()
     })
         .insert(Body {
-            linear_velocity: Vec3::ZERO,
             inv_mass: 0.0,
             shape: PyhsicsShape::Sphere{ radius: ground_radius },
+            ..Default::default()
         })
         .insert(Name::new("Ground"));
 

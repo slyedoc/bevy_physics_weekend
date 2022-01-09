@@ -111,10 +111,11 @@ fn resolve_contact(
             let (mut b_body, mut b_transform) = query.get_unchecked(contact.entity_b).unwrap();
 
             let total_inv_mass = a_body.inv_mass + b_body.inv_mass;
+            let elasticity = a_body.elasticity * b_body.elasticity;
 
             // Calculate the collion impulse
             let vab = a_body.linear_velocity - b_body.linear_velocity;
-            let impluse_j = -2.0 * vab.dot(contact.normal) / total_inv_mass;
+            let impluse_j = -(1.0 + elasticity) * vab.dot(contact.normal) / total_inv_mass;
             let vector_impluse_j = contact.normal * impluse_j;
 
             a_body.apply_impulse_linear(vector_impluse_j * 1.0);
