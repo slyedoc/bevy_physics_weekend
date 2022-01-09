@@ -1,11 +1,14 @@
 mod helper;
 use bevy::prelude::*;
 use bevy_physics_weekend::prelude::*;
+use bevy_inspector_egui::WorldInspectorPlugin;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugin(PhysicsPlugin)
+        
+        .add_plugin(WorldInspectorPlugin::default())
+        .add_plugin(PhysicsPlugin) // has to be after inspector plugin
         .add_plugin(helper::CameraControllerPlugin)
         .add_startup_system(setup)
         .run();
@@ -17,10 +20,11 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // cube
+    // sphere
+    let sphere_radius = 1.0;
     commands
         .spawn_bundle(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
+        mesh: meshes.add(Mesh::from(shape::UVSphere { radius: sphere_radius, sectors: 100, stacks: 100 })),
         transform: Transform::from_xyz(0.0, 10.5, 0.0),
         material: materials.add(StandardMaterial {
              base_color: Color::RED,
@@ -28,29 +32,31 @@ fn setup(
         }),
         ..Default::default()
     })
-        .insert(Body::default())
-        .insert(Name::new("Cube"));
+        .insert(Body {
+            linear_velocity: Vec3::ZERO,
+            inv_mass: 1.0,
+            shape: PyhsicsShape::Sphere{ radius: sphere_radius },
+        })
+        .insert(Name::new("Sphere"));
 
     // Ground
+    let ground_radius = 10.0;
     commands
         .spawn_bundle(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::UVSphere { radius: 1000.0, sectors: 100, stacks: 100 })),
-        transform: Transform::from_xyz(0.0, -1000.0, 0.0),
+        mesh: meshes.add(Mesh::from(shape::UVSphere { radius: ground_radius, sectors: 100, stacks: 100 })),
+        transform: Transform::from_xyz(0.0, -10.0, 0.0),
         material: materials.add(StandardMaterial {
              base_color: Color::GREEN,
              ..Default::default()
         }),
         ..Default::default()
-        // materials.add(CustomMaterial {
-        //     color: Color::GREEN,
-        // }),
     })
         .insert(Body {
             linear_velocity: Vec3::ZERO,
             inv_mass: 0.0,
-            shape: PyhsicsShape::Sphere{ radius: 1000.0 },
+            shape: PyhsicsShape::Sphere{ radius: ground_radius },
         })
-        .insert(Name::new("Sphere"));
+        .insert(Name::new("Ground"));
 
 
     // camera

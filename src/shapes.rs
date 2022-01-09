@@ -1,6 +1,8 @@
 use bevy::prelude::*;
+use bevy_inspector_egui::Inspectable;
 
-#[derive(Copy, Clone, Debug)]
+
+#[derive(Inspectable, Copy, Clone, Debug)]
 pub enum PyhsicsShape {
     Sphere { radius: f32 },
 }

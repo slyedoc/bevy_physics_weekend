@@ -1,7 +1,10 @@
 use crate::shapes::*;
 use bevy::prelude::*;
 
-#[derive(Component, Copy, Clone, Debug)]
+use bevy_inspector_egui::Inspectable;
+
+
+#[derive(Component, Copy, Clone, Debug, Inspectable)]
 pub struct Body {
     pub linear_velocity: Vec3,
     pub inv_mass: f32,

@@ -3,9 +3,11 @@
 mod body;
 mod shapes;
 
+use crate::shapes::PyhsicsShape;
 use bevy::prelude::*;
+use bevy_inspector_egui::RegisterInspectable;
 use body::*;
-use shapes::PyhsicsShape;
+
 pub mod prelude {
     pub use crate::{body::*, shapes::*, PhysicsPlugin};
 }
@@ -41,8 +43,10 @@ impl Plugin for PhysicsPlugin {
                 apply_linear_velocity
                     .label(PhysicsSystem::Apply)
                     .after(PhysicsSystem::Resolve),
-            );
+            )
+            .register_inspectable::<Body>();
 
+        // incase user didn't supply a gravity
         app.init_resource::<Gravity>();
     }
 }
@@ -50,7 +54,7 @@ impl Plugin for PhysicsPlugin {
 fn update_bodies(
     gravity: Res<Gravity>,
     time: Res<Time>,
-    mut query: Query<(Entity, &mut Body, &mut GlobalTransform)>,
+    mut query: Query<(Entity, &mut Body, &mut Transform)>,
     mut contact_events: EventWriter<ContactEvent>,
 ) {
     let dt = time.delta_seconds();
@@ -76,7 +80,7 @@ fn update_bodies(
                 PyhsicsShape::Sphere { radius: radius_a },
                 PyhsicsShape::Sphere { radius: radius_b },
             ) => {
-                let ab = a_transform.translation - b_transform.translation;
+                let ab = b_transform.translation - a_transform.translation;
                 let radius_ab = radius_a + radius_b;
                 let radius_ab_sq = radius_ab * radius_ab;
                 let ab_len_sq = ab.length_squared();
@@ -86,7 +90,7 @@ fn update_bodies(
                         entity_a: a,
                         entity_b: b,
                         world_point_a: a_transform.translation + ab_normal * radius_a,
-                        world_point_b: a_transform.translation - ab_normal * radius_b,
+                        world_point_b: b_transform.translation - ab_normal * radius_b,
                         normal: ab_normal,
                     });
                 }
@@ -97,37 +101,34 @@ fn update_bodies(
 
 fn resolve_contact(
     mut contact_events: EventReader<ContactEvent>,
-    mut query: Query<(Entity, &mut Body, &mut GlobalTransform)>,
+    mut query: Query<(&mut Body, &mut Transform)>,
 ) {
     for contact in contact_events.iter() {
-
-        // SAFETY: There no safe way to access the query twice the same time
+        // SAFETY: There is no way to safey access the query twice at the same time I am aware of
         // see https://github.com/bevyengine/bevy/issues/2042
         unsafe {
-            let (a, mut a_body, mut a_transform) = query.get_unchecked(contact.entity_a).unwrap();
-            let (b, mut b_body, mut b_transform) = query.get_unchecked(contact.entity_b).unwrap();
+            let (mut a_body, mut a_transform) = query.get_unchecked(contact.entity_a).unwrap();
+            let (mut b_body, mut b_transform) = query.get_unchecked(contact.entity_b).unwrap();
 
             a_body.linear_velocity = Vec3::ZERO;
             b_body.linear_velocity = Vec3::ZERO;
 
-            // let tA = a_body.inv_mass / (a_body.inv_mass + b_body.inv_mass);
-            // let tB = b_body.inv_mass / (a_body.inv_mass + b_body.inv_mass);
-
-            // let ds = contact.world_point_a - contact.world_point_b;
-            // a_transform.translation += ds * tA;
-            // b_transform.translation += ds * tB;
+            // Seperate the two bodies by the contact normal
+            let direction = contact.world_point_b - contact.world_point_a;
+            let total_inv_mass = a_body.inv_mass + b_body.inv_mass;
+            let a_move_weight = a_body.inv_mass / total_inv_mass;
+            let b_move_weight = b_body.inv_mass / total_inv_mass;
+            a_transform.translation += direction * a_move_weight;
+            b_transform.translation -= direction * b_move_weight;
         }
     }
 }
 
-fn apply_linear_velocity(
-    mut query: Query<(Entity, &mut Body, &mut GlobalTransform)>,
-    time: Res<Time>,
-) {
+fn apply_linear_velocity(mut query: Query<(Entity, &mut Body, &mut Transform)>, time: Res<Time>) {
     // apply linear velocity
     let dt = time.delta_seconds();
-    for (_, body, mut global_transform) in query.iter_mut() {
-        global_transform.translation += body.linear_velocity * dt;
+    for (_, body, mut transform) in query.iter_mut() {
+        transform.translation += body.linear_velocity * dt;
     }
 }
 
@@ -141,7 +142,6 @@ pub struct ContactEvent {
     // local_point_a: Vec3,
     // local_point_b: Vec3,
     normal: Vec3,
-
     // separation_dist: f32,
     // time_of_impact: f32,
 
