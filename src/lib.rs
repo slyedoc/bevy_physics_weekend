@@ -110,12 +110,18 @@ fn resolve_contact(
             let (mut a_body, mut a_transform) = query.get_unchecked(contact.entity_a).unwrap();
             let (mut b_body, mut b_transform) = query.get_unchecked(contact.entity_b).unwrap();
 
-            a_body.linear_velocity = Vec3::ZERO;
-            b_body.linear_velocity = Vec3::ZERO;
-
-            // Seperate the two bodies by the contact normal
-            let direction = contact.world_point_b - contact.world_point_a;
             let total_inv_mass = a_body.inv_mass + b_body.inv_mass;
+
+            // Calculate the collion impulse
+            let vab = a_body.linear_velocity - b_body.linear_velocity;
+            let impluse_j = -2.0 * vab.dot(contact.normal) / total_inv_mass;
+            let vector_impluse_j = contact.normal * impluse_j;
+
+            a_body.apply_impulse_linear(vector_impluse_j * 1.0);
+            b_body.apply_impulse_linear(vector_impluse_j * -1.0);
+
+            // Let's also move our colliding objects to just outside of each other
+            let direction = contact.world_point_b - contact.world_point_a;
             let a_move_weight = a_body.inv_mass / total_inv_mass;
             let b_move_weight = b_body.inv_mass / total_inv_mass;
             a_transform.translation += direction * a_move_weight;
