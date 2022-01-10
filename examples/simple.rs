@@ -1,7 +1,7 @@
 mod helper;
 use bevy::prelude::*;
-use bevy_physics_weekend::prelude::*;
 use bevy_inspector_egui::WorldInspectorPlugin;
+use bevy_physics_weekend::prelude::*;
 
 fn main() {
     App::new()
@@ -18,52 +18,72 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    asset_server: Res<AssetServer>
+    asset_server: Res<AssetServer>,
 ) {
-    let roundness = 50;
+    let roundness = 60;
 
     // sphere
-    let sphere_radius = 1.0;
-    commands
-        .spawn_bundle(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::UVSphere { radius: sphere_radius, sectors: roundness, stacks: roundness })),
-        transform: Transform::from_xyz(0.0, 1.0, 0.0),
-        material: materials.add(StandardMaterial {
-             base_color_texture: Some(asset_server.load("checker_red.png")),
-             ..Default::default()
-        }),
+
+    let ball_material = materials.add(StandardMaterial {
+        base_color_texture: Some(asset_server.load("checker_red.png")),
         ..Default::default()
-    })
-        .insert(Body {
-            shape: PyhsicsShape::Sphere{ radius: sphere_radius },
-            inv_mass: 1.0,
-            elasticity: 0.0,
-            friction: 0.1,            
-            ..Default::default()
-        })
-        .insert(Name::new("Sphere"));
+    });
+    let mesh = meshes.add(Mesh::from(shape::UVSphere {
+        radius: 1.0,
+        sectors: roundness,
+        stacks: roundness,
+    }));
+
+    spawn_ball(
+        Vec3::new(0.0, 10.0, 0.0),
+        Vec3::new(0.0, 0.0, 0.0),
+        &mut commands,
+        mesh.clone(),
+        ball_material.clone(),
+    );
+
+    spawn_ball(
+        Vec3::new(3.0, 1.0, 0.0),
+        Vec3::new(0.0, 0.0, 0.0),
+        &mut commands,
+        mesh.clone(),
+        ball_material.clone(),
+    );
+
+    spawn_ball(
+        Vec3::new(100.0, 1.0, 0.0),
+        Vec3::new(-100.0, 0.0, 0.0),
+        &mut commands,
+        mesh.clone(),
+        ball_material.clone(),
+    );
 
     // Ground
     let ground_radius = 1000.0;
     commands
         .spawn_bundle(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::UVSphere { radius: ground_radius, sectors: roundness, stacks: roundness })),
-        transform: Transform::from_xyz(0.0, -ground_radius, 0.0),
-        material: materials.add(StandardMaterial {
-             base_color: Color::GREEN,
-             ..Default::default()
-        }),
-        ..Default::default()
-    })
+            mesh: meshes.add(Mesh::from(shape::UVSphere {
+                radius: ground_radius,
+                sectors: roundness,
+                stacks: roundness,
+            })),
+            transform: Transform::from_xyz(0.0, -ground_radius, 0.0),
+            material: materials.add(StandardMaterial {
+                base_color: Color::GREEN,
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
         .insert(Body {
             inv_mass: 0.0,
-            shape: PyhsicsShape::Sphere{ radius: ground_radius },
+            shape: PyhsicsShape::Sphere {
+                radius: ground_radius,
+            },
             friction: 0.1,
-            elasticity: 1.0,
+            elasticity: 0.5,
             ..Default::default()
         })
         .insert(Name::new("Ground"));
-
 
     // camera
     commands
@@ -87,4 +107,29 @@ fn setup(
             ..Default::default()
         })
         .insert(Name::new("Light"));
+}
+
+fn spawn_ball(
+    pos: Vec3,
+    linear_velocity: Vec3,
+    commands: &mut Commands,
+    mesh: Handle<Mesh>,
+    material: Handle<StandardMaterial>,
+) {
+    commands
+        .spawn_bundle(PbrBundle {
+            transform: Transform::from_translation(pos),
+            mesh,
+            material,
+            ..Default::default()
+        })
+        .insert(Body {
+            shape: PyhsicsShape::Sphere { radius: 1.0 },
+            inv_mass: 1.0,
+            elasticity: 1.0,
+            friction: 0.5,
+            linear_velocity,
+            ..Default::default()
+        })
+        .insert(Name::new("Sphere"));
 }
