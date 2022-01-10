@@ -19,4 +19,12 @@ impl PyhsicsShape {
             PyhsicsShape::Sphere { .. } => Vec3::ZERO,
         }
     }
+
+    pub fn inertia_tensor(&self) -> Mat3 {
+        match self {
+            PyhsicsShape::Sphere { radius } => {
+                Mat3::from_diagonal(Vec3::splat(2.0 * radius * radius / 5.0))
+            }
+        }
+    }
 }

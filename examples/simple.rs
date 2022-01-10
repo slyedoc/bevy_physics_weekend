@@ -18,33 +18,37 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>
 ) {
+    let roundness = 50;
+
     // sphere
     let sphere_radius = 1.0;
     commands
         .spawn_bundle(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::UVSphere { radius: sphere_radius, sectors: 100, stacks: 100 })),
-        transform: Transform::from_xyz(0.0, 10.5, 0.0),
+        mesh: meshes.add(Mesh::from(shape::UVSphere { radius: sphere_radius, sectors: roundness, stacks: roundness })),
+        transform: Transform::from_xyz(0.0, 1.0, 0.0),
         material: materials.add(StandardMaterial {
-             base_color: Color::RED,
+             base_color_texture: Some(asset_server.load("checker_red.png")),
              ..Default::default()
         }),
         ..Default::default()
     })
         .insert(Body {
-            inv_mass: 1.0,
             shape: PyhsicsShape::Sphere{ radius: sphere_radius },
-            elasticity: 0.5,
+            inv_mass: 1.0,
+            elasticity: 0.0,
+            friction: 0.1,            
             ..Default::default()
         })
         .insert(Name::new("Sphere"));
 
     // Ground
-    let ground_radius = 10.0;
+    let ground_radius = 1000.0;
     commands
         .spawn_bundle(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::UVSphere { radius: ground_radius, sectors: 100, stacks: 100 })),
-        transform: Transform::from_xyz(0.0, -10.0, 0.0),
+        mesh: meshes.add(Mesh::from(shape::UVSphere { radius: ground_radius, sectors: roundness, stacks: roundness })),
+        transform: Transform::from_xyz(0.0, -ground_radius, 0.0),
         material: materials.add(StandardMaterial {
              base_color: Color::GREEN,
              ..Default::default()
@@ -54,6 +58,8 @@ fn setup(
         .insert(Body {
             inv_mass: 0.0,
             shape: PyhsicsShape::Sphere{ radius: ground_radius },
+            friction: 0.1,
+            elasticity: 1.0,
             ..Default::default()
         })
         .insert(Name::new("Ground"));
@@ -73,6 +79,7 @@ fn setup(
         .spawn_bundle(DirectionalLightBundle {
             transform: Transform::from_xyz(0.0, 10.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
             directional_light: DirectionalLight {
+                shadows_enabled: true,
                 illuminance: 5000.,
                 color: Color::WHITE,
                 ..Default::default()
