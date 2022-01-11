@@ -1,3 +1,5 @@
+use std::ops::{Add, AddAssign};
+
 use bevy::math::Vec3;
 use bevy_inspector_egui::Inspectable;
 
@@ -17,6 +19,10 @@ impl Default for Bounds {
 }
 
 impl Bounds {
+
+    pub fn from_points(pts: &[Vec3]) -> Self {
+        pts.iter().fold(Bounds::default(), |acc, pt| acc + *pt)
+    }
     // fn clear(&mut self) {
     //     *self = Self::new();
     // }
@@ -47,6 +53,10 @@ impl Bounds {
     //     self.expand_by_point(rhs.maxs);
     // }
 
+    pub fn width(&self) -> Vec3 {
+        self.maxs - self.mins
+    }
+
     // fn width_x(&self) -> f32 {
     //     self.maxs.x - self.mins.x
     // }
@@ -58,4 +68,21 @@ impl Bounds {
     // fn width_z(&self) -> f32 {
     //     self.maxs.z - self.mins.z
     // }
+}
+
+impl Add<Vec3> for Bounds {
+    type Output = Self;
+    fn add(self, pt: Vec3) -> Self::Output {
+        Bounds {
+            mins: Vec3::select(pt.cmplt(self.mins), pt, self.mins),
+            maxs: Vec3::select(pt.cmpgt(self.maxs), pt, self.maxs),
+        }
+    }
+}
+
+impl AddAssign<Vec3> for Bounds {
+    fn add_assign(&mut self, pt: Vec3) {
+        self.mins = Vec3::select(pt.cmplt(self.mins), pt, self.mins);
+        self.maxs = Vec3::select(pt.cmpgt(self.maxs), pt, self.maxs);
+    }
 }
