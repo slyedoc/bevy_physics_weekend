@@ -1,18 +1,22 @@
 use bevy::math::Vec3;
+use bevy_inspector_egui::Inspectable;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Inspectable, Copy, Clone, Debug, PartialEq)]
 pub struct Bounds {
     pub mins: Vec3,
     pub maxs: Vec3,
 }
 
+impl Default for Bounds {
+    fn default() -> Self {
+        Self {
+            mins: Vec3::splat(std::f32::MAX),
+            maxs: Vec3::splat(-std::f32::MAX),
+        }
+    }
+}
+
 impl Bounds {
-    // fn new() -> Bounds {
-    //     Bounds {
-    //         mins: Vec3::splat(std::f32::MAX),
-    //         maxs: Vec3::splat(-std::f32::MAX),
-    //     }
-    // }
     // fn clear(&mut self) {
     //     *self = Self::new();
     // }

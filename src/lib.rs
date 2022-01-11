@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![allow(unused_variables)]
 
 mod body;
 mod shapes;
@@ -140,7 +141,7 @@ fn sweep_and_prune_1d(query: &mut Query<(Entity, &mut Body, &mut Transform)>, co
 fn sort_bodies_bounds(query: &mut Query<(Entity, &mut Body, &mut Transform)>, count: usize, dt: f32) -> Vec<PsuedoBody> {
     let mut sorted_bodies = Vec::<PsuedoBody>::with_capacity(count * 2);
     let axis = Vec3::ONE.normalize();
-    for (i, (entity, mut body, t)) in query.iter_mut().enumerate() {
+    for (i, (entity, body, t)) in query.iter_mut().enumerate() {
         let mut bounds = body.shape.bounds(&t);
 
         // expand the bounds by the linear velocity
@@ -176,8 +177,7 @@ fn build_pairs(sorted_bodies: &[PsuedoBody]) -> Vec<CollisionPair> {
             continue;
         }
 
-        for j in (i + 1)..sorted_bodies.len() {
-            let b = &sorted_bodies[j];
+        for b in sorted_bodies.iter().skip(i + 1) {
             // if we've hit the end of the a element then we're done creating pairs with a
             if b.entity == a.entity {
                 break;
@@ -357,6 +357,9 @@ pub fn intersect_test(
                 None
             }
         }
+        (PyhsicsShape::Sphere { radius }, PyhsicsShape::Box { points, bounds, com }) => todo!(),
+        (PyhsicsShape::Box { points, bounds, com }, PyhsicsShape::Sphere { radius }) => todo!(),
+        (PyhsicsShape::Box { points: points_a, bounds: bounds_a, com: com_a }, PyhsicsShape::Box { points: points_b, bounds: bounds_b, com: com_b }) => todo!(),
     }
 }
 
