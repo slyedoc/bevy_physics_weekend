@@ -50,12 +50,27 @@ fn setup(
         ball_material.clone(),
     );
 
+    let size = 5;
+    for i in 0..size {
+        for j in 0..size {
+            for k in 0..size {
+                spawn_ball(
+                    Vec3::new(i as f32 * 2.2 , j as f32 * 2.2, k as f32 * 2.2),
+                    Vec3::new(0.0, 0.0, 0.0),
+                    &mut commands,
+                    mesh.clone(),
+                    ball_material.clone(),
+                );
+            }
+        }
+    }
+
     spawn_ball(
-        Vec3::new(100.0, 1.0, 0.0),
-        Vec3::new(-100.0, 0.0, 0.0),
+        Vec3::new(50.0, 1.0, 0.0),
+        Vec3::new(-1000.0, 0.0, 0.0),
         &mut commands,
-        mesh.clone(),
-        ball_material.clone(),
+        mesh,
+        ball_material,
     );
 
     // Ground
@@ -88,7 +103,7 @@ fn setup(
     // camera
     commands
         .spawn_bundle(PerspectiveCameraBundle {
-            transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+            transform: Transform::from_xyz(30.0, 5.0, 30.0).looking_at(Vec3::ZERO, Vec3::Y),
             ..Default::default()
         })
         .insert(helper::CameraController::default())

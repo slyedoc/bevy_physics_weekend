@@ -2,6 +2,7 @@
 
 mod body;
 mod shapes;
+mod bounds;
 
 use crate::shapes::PyhsicsShape;
 use bevy::prelude::*;
@@ -41,15 +42,17 @@ impl Plugin for PhysicsPlugin {
     }
 }
 
-// TODO: Rename, using
 fn update_system(
     gravity: Res<Gravity>,
     time: Res<Time>,
     mut query: Query<(Entity, &mut Body, &mut Transform)>,
 ) {
     let dt = time.delta_seconds();
+    let mut count = 0;
+
     // apply gravity
     for (_, mut body, _) in query.iter_mut() {
+        count += 1;
         if body.inv_mass != 0.0 {
             // gravity needs to be an impulse
             // I = dp, F = dp/dt => dp = F * dt => I = F * dt
@@ -60,16 +63,26 @@ fn update_system(
         }
     }
 
+    //
+    // Broadphase
+    //
+    let collision_pairs = broadphase( &mut query, count, dt);
+
+    //
+    // Narrowphase (perform actual collision detection)
+    //
+
     // find contacts collisions
     let mut contacts = Vec::new();
-    let mut iter = query.iter_combinations_mut();
-    while let Some([(a, mut body_a, mut transform_a), (b, mut body_b, mut transform_b)]) = iter.fetch_next() {
-        if body_a.inv_mass == 0.0 && body_b.inv_mass == 0.0 {
-            continue;
-        }
-
-        if let Some(contact) = intersect_test(a, &mut body_a, &mut transform_a, b, &mut body_b, &mut transform_b, dt) {
-            contacts.push(contact);
+    for pair in collision_pairs {
+        // SAFETY: There is no way for a and b to the same    
+        // see https://github.com/bevyengine/bevy/issues/2042
+        unsafe {
+            let (_, mut body_a, mut transform_a) = query.get_unchecked(pair.a).unwrap();
+            let (_, mut body_b, mut transform_b) = query.get_unchecked(pair.b).unwrap();
+            if let Some(contact) = intersect_test(pair.a, &mut body_a, &mut transform_a, pair.b, &mut body_b, &mut transform_b, dt) {
+                contacts.push(contact)
+            }
         }
     }
 
@@ -84,6 +97,8 @@ fn update_system(
         }
     });
 
+
+    // Apply Ballistic impulses
     let mut accumulated_time = 0.0;
     for contact in contacts {
         let contact_time = contact.time_of_impact - accumulated_time;
@@ -106,24 +121,80 @@ fn update_system(
 
     // update positions for the rest of this frame's time
     let time_remaining = dt - accumulated_time;
-    for (_, mut body, mut transform) in query.iter_mut() {
-        body.update(&mut transform, time_remaining)
+    if time_remaining > 0.0 {
+        for (_, mut body, mut transform) in query.iter_mut() {
+            body.update( &mut transform, time_remaining)
+        }
+    }
+}
+
+fn broadphase(query: &mut Query<(Entity, &mut Body, &mut Transform)>, count: usize,  dt: f32) -> Vec<CollisionPair> {
+    sweep_and_prune_1d(query, count, dt)
+}
+
+fn sweep_and_prune_1d(query: &mut Query<(Entity, &mut Body, &mut Transform)>, count: usize, dt: f32) -> Vec<CollisionPair> {
+    let sorted_bodies = sort_bodies_bounds( query, count, dt);
+    build_pairs(&sorted_bodies)
+}
+
+fn sort_bodies_bounds(query: &mut Query<(Entity, &mut Body, &mut Transform)>, count: usize, dt: f32) -> Vec<PsuedoBody> {
+    let mut sorted_bodies = Vec::<PsuedoBody>::with_capacity(count * 2);
+    let axis = Vec3::ONE.normalize();
+    for (i, (entity, mut body, t)) in query.iter_mut().enumerate() {
+        let mut bounds = body.shape.bounds(&t);
+
+        // expand the bounds by the linear velocity
+        bounds.expand_by_point(bounds.mins + body.linear_velocity * dt);
+        bounds.expand_by_point(bounds.maxs + body.linear_velocity * dt);
+
+        const BOUNDS_EPS: f32 = 0.01;
+        bounds.expand_by_point(bounds.mins - Vec3::splat(BOUNDS_EPS));
+        bounds.expand_by_point(bounds.maxs + Vec3::splat(BOUNDS_EPS));
+
+        sorted_bodies.push(PsuedoBody {
+            entity,
+            value: axis.dot(bounds.mins),
+            is_min: true,
+        });
+        sorted_bodies.push(PsuedoBody {
+            entity,
+            value: axis.dot(bounds.maxs),
+            is_min: false,
+        });
+    }
+    sorted_bodies.sort_unstable_by(compare_sat);
+    sorted_bodies
+}
+
+fn build_pairs(sorted_bodies: &[PsuedoBody]) -> Vec<CollisionPair> {
+    let mut collision_pairs = Vec::new();
+
+    // Now that the bodies are sorted, build the collision pairs
+    for i in 0..sorted_bodies.len() {
+        let a = &sorted_bodies[i];
+        if !a.is_min {
+            continue;
+        }
+
+        for j in (i + 1)..sorted_bodies.len() {
+            let b = &sorted_bodies[j];
+            // if we've hit the end of the a element then we're done creating pairs with a
+            if b.entity == a.entity {
+                break;
+            }
+
+            if !b.is_min {
+                continue;
+            }
+
+            collision_pairs.push(CollisionPair {
+                a: a.entity,
+                b: b.entity,
+            });
+        }
     }
 
-    // let ab = transform_b.translation - transform_a.translation;
-    // let radius_ab = radius_a + radius_b;
-    // let radius_ab_sq = radius_ab * radius_ab;
-    // let ab_len_sq = ab.length_squared();
-    // if ab_len_sq <= radius_ab_sq {
-    //     let ab_normal = ab.normalize();
-    //     contact_events.send(ContactEvent {
-    //         entity_a: a,
-    //         entity_b: b,
-    //         world_point_a: transform_a.translation + ab_normal * radius_a,
-    //         world_point_b: transform_b.translation - ab_normal * radius_b,
-    //         normal: ab_normal,
-    //     });
-    // }
+    collision_pairs
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -360,3 +431,34 @@ fn resolve_contact(
         transform_b.translation -= direction * b_move_weight;
     }
 }
+
+#[derive(Copy, Clone, Debug)]
+struct PsuedoBody {
+    entity: Entity,
+    value: f32,
+    is_min: bool,
+}
+
+fn compare_sat(a: &PsuedoBody, b: &PsuedoBody) -> std::cmp::Ordering {
+    if a.value < b.value {
+        std::cmp::Ordering::Less
+    } else if a.value > b.value {
+        std::cmp::Ordering::Greater
+    } else {
+        std::cmp::Ordering::Equal
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+struct CollisionPair {
+    a: Entity,
+    b: Entity,
+}
+
+impl PartialEq for CollisionPair {
+    fn eq(&self, other: &Self) -> bool {
+        (self.a == other.a && self.b == other.b) || (self.a == other.b && self.b == other.a)
+    }
+}
+
+impl Eq for CollisionPair {}

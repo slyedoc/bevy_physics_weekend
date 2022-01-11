@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_inspector_egui::Inspectable;
-
+use crate::bounds::*;
 
 #[derive(Inspectable, Copy, Clone, Debug)]
 pub enum PyhsicsShape {
@@ -25,6 +25,15 @@ impl PyhsicsShape {
             PyhsicsShape::Sphere { radius } => {
                 Mat3::from_diagonal(Vec3::splat(2.0 * radius * radius / 5.0))
             }
+        }
+    }
+
+    pub fn bounds(&self, transform: &Transform) -> Bounds {
+        match self {
+            PyhsicsShape::Sphere { radius } => Bounds {
+                mins: Vec3::splat(-radius) + transform.translation,
+                maxs: Vec3::splat(*radius) + transform.translation,
+            },
         }
     }
 }
