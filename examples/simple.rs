@@ -91,9 +91,11 @@ fn setup(
         })
         .insert(Body {
             inv_mass: 0.0,
-            shape: PyhsicsShape::Sphere {
-                radius: ground_radius,
-            },
+            shape: Shape::Sphere(
+                ShapeSphere {
+                    radius: ground_radius,
+                }
+            ),
             friction: 0.1,
             elasticity: 0.5,
             ..Default::default()
@@ -139,7 +141,11 @@ fn spawn_ball(
             ..Default::default()
         })
         .insert(Body {
-            shape: PyhsicsShape::Sphere { radius: 1.0 },
+            shape:  Shape::Sphere(
+                ShapeSphere {
+                    radius: 1.0,
+                }
+            ),
             inv_mass: 1.0,
             elasticity: 1.0,
             friction: 0.5,

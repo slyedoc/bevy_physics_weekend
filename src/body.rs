@@ -1,19 +1,16 @@
+use std::sync::Arc;
+
 use crate::shapes::*;
 use bevy::prelude::*;
 
-use bevy_inspector_egui::Inspectable;
-
-#[derive(Component, Copy, Clone, Debug, Inspectable)]
+#[derive(Component)]
 pub struct Body {
     pub linear_velocity: Vec3,
     pub angular_velocity: Vec3,
     pub inv_mass: f32,
-    pub shape: PyhsicsShape,
-    #[inspectable(min = 0.0, max = 1.0)]
-    pub elasticity: f32,
-
-    #[inspectable(min = 0.0, max = 1.0)]
-    pub friction: f32,
+    pub shape: Shape,
+    pub elasticity: f32, // min = 0.0, max = 1.0
+    pub friction: f32, // min = 0.0, max = 1.0
 }
 
 impl Default for Body {
@@ -22,7 +19,7 @@ impl Default for Body {
             linear_velocity: Vec3::default(),
             angular_velocity: Vec3::default(),
             inv_mass: 1.0,
-            shape: PyhsicsShape::default(),
+            shape: Shape::default() ,
             elasticity: 0.5,
             friction: 0.5,
         }
@@ -30,11 +27,10 @@ impl Default for Body {
 }
 
 impl Body {
-    pub fn get_centre_of_mass_local(&self) -> Vec3 {
-        self.shape.centre_of_mass()
-    }
+
+
     pub fn get_centre_of_mass_world(&self, t: &Transform) -> Vec3 {
-        t.translation + t.rotation * self.get_centre_of_mass_local()
+        t.translation + t.rotation * self.shape.centre_of_mass()
     }
 
     pub fn world_to_local(&self, t: &Transform, world_point: Vec3) -> Vec3 {

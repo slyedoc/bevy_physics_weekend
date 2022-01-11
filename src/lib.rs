@@ -5,9 +5,10 @@ mod body;
 mod shapes;
 mod bounds;
 
-use crate::shapes::PyhsicsShape;
+use std::borrow::BorrowMut;
+
+use shapes::*;
 use bevy::prelude::*;
-use bevy_inspector_egui::RegisterInspectable;
 use body::*;
 
 pub mod prelude {
@@ -34,9 +35,7 @@ impl Default for Gravity {
 pub struct PhysicsPlugin;
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<ContactEvent>()
-            .add_system(update_system)
-            .register_inspectable::<Body>();
+        app.add_system(update_system);
 
         // incase user didn't supply a gravity
         app.init_resource::<Gravity>();
@@ -311,9 +310,12 @@ pub fn intersect_test(
     }
 
     // test for intersections, fire contact event if necessary
-    let shapes = (body_a.shape, body_b.shape);
+    let shape_a = body_a.shape.clone();
+    let shape_b = body_b.shape.clone();
+    let shapes = ( shape_a, shape_b);
     match shapes {
-        (PyhsicsShape::Sphere { radius: radius_a }, PyhsicsShape::Sphere { radius: radius_b }) => {
+        (Shape::Sphere( ShapeSphere { radius: radius_a }), Shape::Sphere( ShapeSphere { radius: radius_b })) => {
+
             if let Some((world_point_a, world_point_b, time_of_impact)) = sphere_sphere_dynamic(
                 radius_a,
                 radius_b,
@@ -357,9 +359,14 @@ pub fn intersect_test(
                 None
             }
         }
-        (PyhsicsShape::Sphere { radius }, PyhsicsShape::Box { points, bounds, com }) => todo!(),
-        (PyhsicsShape::Box { points, bounds, com }, PyhsicsShape::Sphere { radius }) => todo!(),
-        (PyhsicsShape::Box { points: points_a, bounds: bounds_a, com: com_a }, PyhsicsShape::Box { points: points_b, bounds: bounds_b, com: com_b }) => todo!(),
+        (Shape::Sphere(_), Shape::Box(_)) => todo!(),
+        (Shape::Sphere(_), Shape::Convex(_)) => todo!(),
+        (Shape::Box(_), Shape::Sphere(_)) => todo!(),
+        (Shape::Box(_), Shape::Box(_)) => todo!(),
+        (Shape::Box(_), Shape::Convex(_)) => todo!(),
+        (Shape::Convex(_), Shape::Sphere(_)) => todo!(),
+        (Shape::Convex(_), Shape::Box(_)) => todo!(),
+        (Shape::Convex(_), Shape::Convex(_)) => todo!(),
     }
 }
 
