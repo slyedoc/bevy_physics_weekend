@@ -8,7 +8,7 @@ The 3 books have already been ported to bevy by Bitshifter [here](https://github
 
 ## Status
 
-Still working though book 1 at the moment.
+Working though book 2 at the moment.
 
 ## Why
 
@@ -22,8 +22,10 @@ And the last reason, though admittedly the weakest, here is no interest in havin
 
 ## Goal
 
+Learn about physics engines.
+
 The aims to provide a simple bevy physics plugin that's completely native to bevy.
 
-This will never be as feature rich as rapier, but hopefully it can be easier to use and understand.
+This will never be as feature rich as rapier, but hopefully it can be to use and understand.
 
-I doubt I have the skills to get this to outperform rapier in anything but simple use cases, but it should be fun to try.
+I doubt this will ever outperform rapier, but it should be fun to see how close it can get.
