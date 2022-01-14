@@ -1,73 +1,26 @@
-use super::{ShapeTrait};
 use crate::bounds::Bounds;
 use bevy::{math::{Mat3, Vec3}, prelude::Transform};
 
+use super::{Collider, ShapeType};
+
 #[derive(Clone, Debug)]
-pub struct ShapeConvex {
+pub struct Convex {
     points: Vec<Vec3>,
     bounds: Bounds,
     com: Vec3,
 }
 
-impl ShapeConvex {
-    pub fn new(_points: &[Vec3]) -> Self {
-        unimplemented!();
+impl From<Convex> for Collider {
+    fn from(value: Convex) -> Self {
+        Collider {
+            center_of_mass: Vec3::ZERO,
+            inertia_tensor: Mat3::ZERO,
+            bounds: value.bounds,
+            shape: ShapeType::Convex,
+        }
     }
 }
 
-impl ShapeTrait for ShapeConvex {
-    fn centre_of_mass(&self) -> Vec3 {
-        self.com
-    }
-
-    fn inertia_tensor(&self) -> Mat3 {
-        unimplemented!();
-    }
-
-    fn local_bounds(&self) -> Bounds {
-        self.bounds
-    }
-
-    fn bounds(&self, transform: &Transform) -> Bounds {
-        // TODO: this is the same as the box version
-        let corners = [
-            Vec3::new(self.bounds.mins.x, self.bounds.mins.y, self.bounds.mins.z),
-            Vec3::new(self.bounds.mins.x, self.bounds.mins.y, self.bounds.maxs.z),
-            Vec3::new(self.bounds.mins.x, self.bounds.maxs.y, self.bounds.mins.z),
-            Vec3::new(self.bounds.maxs.x, self.bounds.mins.y, self.bounds.mins.z),
-            Vec3::new(self.bounds.maxs.x, self.bounds.maxs.y, self.bounds.maxs.z),
-            Vec3::new(self.bounds.maxs.x, self.bounds.maxs.y, self.bounds.mins.z),
-            Vec3::new(self.bounds.maxs.x, self.bounds.mins.y, self.bounds.maxs.z),
-            Vec3::new(self.bounds.mins.x, self.bounds.maxs.y, self.bounds.maxs.z),
-        ];
-
-        let mut bounds = Bounds::default();
-        for pt in &corners {
-            let pt = (transform.rotation * *pt) + transform.translation;
-            bounds.expand_by_point(pt);
-        }
-
-        bounds
-    }
-
-    fn support(&self, _dir: Vec3, _transform: &Transform, _bias: f32) -> Vec3 {
-        unimplemented!();
-    }
-
-    fn fastest_linear_speed(&self, angular_velocity: Vec3, dir: Vec3) -> f32 {
-        // this is the same as the box version
-        let mut max_speed = 0.0;
-        for pt in &self.points {
-            let r = *pt - self.com;
-            let linear_velocity = angular_velocity.cross(r);
-            let speed = dir.dot(linear_velocity);
-            if speed > max_speed {
-                max_speed = speed;
-            }
-        }
-        max_speed
-    }
-}
 
 
 

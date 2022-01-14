@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 // TODO: Just copied this from another project, needs to be cleaned up
 use bevy::{
     core::Time,
@@ -9,9 +11,15 @@ pub struct CameraControllerPlugin;
 
 impl Plugin for CameraControllerPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_system(init_camera_controller)
-            .add_system(update_camera_controller);
+        app.add_system(init_camera_controller.label("init"))
+            .add_system(update_camera_controller.after("init"))
+            .add_startup_system(setup);
     }
+}
+
+fn setup() {
+    info!("Press WASD to move camera, right mouse to rotate");
+
 }
 
 #[derive(Component)]
@@ -29,8 +37,8 @@ pub struct CameraController {
     pub walk_speed: f32,
     pub run_speed: f32,
     pub friction: f32,
-    pub pitch: Option<f32>,
-    pub yaw: Option<f32>,
+    pub pitch: f32,
+    pub yaw: f32,
     pub velocity: Vec3,
     pub position_smoothness: f32,
     pub rotation_smoothness: f32,
@@ -52,8 +60,8 @@ impl Default for CameraController {
             walk_speed: 10.0,
             run_speed: 30.0,
             friction: 0.3,
-            pitch: None,
-            yaw: None,
+            pitch: 0.0,
+            yaw:  0.0,
             velocity: Vec3::ZERO,
 
             position_smoothness: 1.0,
@@ -62,14 +70,14 @@ impl Default for CameraController {
     }
 }
 
-#[allow(clippy::type_complexity)]
 fn init_camera_controller(
     mut query: Query<(&Transform, &mut CameraController), (Added<CameraController>, With<Camera>)>,
 ) {
-    for (transform, mut options) in query.iter_mut() {
+    for (transform, mut controller) in query.iter_mut() {
         let (yaw, pitch, _roll) = yaw_pitch_roll(transform.rotation);
-        options.pitch = Some(pitch);
-        options.yaw = Some(yaw);
+        info!("yaw: {:?}, pitch: {:?}", yaw, pitch);
+        controller.pitch = pitch;
+        controller.yaw = yaw;
     }
 }
 
@@ -84,66 +92,68 @@ fn update_camera_controller(
     let dt = time.delta_seconds();
     let window = windows.get_primary_mut().unwrap();
 
-    for (mut transform, mut options) in query.iter_mut() {
-        if !options.enabled {
+    for (mut transform, mut controller) in query.iter_mut() {
+        if !controller.enabled {
             continue;
         }
 
+        info!("yaw: {:?}, pitch: {:?}", controller.yaw, controller.pitch);
+        
         // Handle key input
         let mut axis_input = Vec3::ZERO;
-        if key_input.pressed(options.key_forward) {
+        if key_input.pressed(controller.key_forward) {
             axis_input.z += 1.0;
         }
-        if key_input.pressed(options.key_back) {
+        if key_input.pressed(controller.key_back) {
             axis_input.z -= 1.0;
         }
-        if key_input.pressed(options.key_right) {
+        if key_input.pressed(controller.key_right) {
             axis_input.x += 1.0;
         }
-        if key_input.pressed(options.key_left) {
+        if key_input.pressed(controller.key_left) {
             axis_input.x -= 1.0;
         }
-        if key_input.pressed(options.key_up) {
+        if key_input.pressed(controller.key_up) {
             axis_input.y += 1.0;
         }
-        if key_input.pressed(options.key_down) {
+        if key_input.pressed(controller.key_down) {
             axis_input.y -= 1.0;
         }
 
         // Apply movement update
         if axis_input != Vec3::ZERO {
-            let max_speed = if key_input.pressed(options.key_run) {
-                options.run_speed
+            let max_speed = if key_input.pressed(controller.key_run) {
+                controller.run_speed
             } else {
-                options.walk_speed
+                controller.walk_speed
             };
-            options.velocity = axis_input.normalize() * max_speed;
+            controller.velocity = axis_input.normalize() * max_speed;
         } else {
-            let friction = options.friction.clamp(0.0, 1.0);
-            options.velocity *= 1.0 - friction;
-            if options.velocity.length_squared() < 1e-6 {
-                options.velocity = Vec3::ZERO;
+            let friction = controller.friction.clamp(0.0, 1.0);
+            controller.velocity *= 1.0 - friction;
+            if controller.velocity.length_squared() < 1e-6 {
+                controller.velocity = Vec3::ZERO;
             }
         }
         let forward = transform.forward();
         let right = transform.right();
-        transform.translation += options.velocity.x * dt * right
-            + options.velocity.y * dt * Vec3::Y
-            + options.velocity.z * dt * forward;
+        transform.translation += controller.velocity.x * dt * right
+            + controller.velocity.y * dt * Vec3::Y
+            + controller.velocity.z * dt * forward;
 
         // Handle mouse look on mouse button
         let mut mouse_delta = Vec2::ZERO;
-        if mouse_input.pressed(options.mouse_look) {
+        if mouse_input.pressed(controller.mouse_look) {
             #[cfg(not(target="wasm32"))]
             window.set_cursor_lock_mode(true);
             window.set_cursor_visibility(false);
         }
-        if mouse_input.just_released(options.mouse_look) {
+        if mouse_input.just_released(controller.mouse_look) {
             #[cfg(not(target="wasm32"))]
             window.set_cursor_lock_mode(false);
             window.set_cursor_visibility(true);
         }
-        if mouse_input.pressed(options.mouse_look) {
+        if mouse_input.pressed(controller.mouse_look) {
             for mouse_event in mouse_events.iter() {
                 mouse_delta += mouse_event.delta;
             }
@@ -152,18 +162,18 @@ fn update_camera_controller(
         if mouse_delta != Vec2::ZERO {
             // Apply look update
             let (pitch, yaw) = (
-                (options.pitch.unwrap() - mouse_delta.y * 0.5 * options.sensitivity * dt).clamp(
+                (controller.pitch - mouse_delta.y * 0.5 * controller.sensitivity * dt).clamp(
                     -0.99 * std::f32::consts::FRAC_PI_2,
                     0.99 * std::f32::consts::FRAC_PI_2,
                 ),
-                options.yaw.unwrap() - mouse_delta.x * options.sensitivity * dt,
+                controller.yaw - mouse_delta.x * controller.sensitivity * dt,
             );
 
             let target = Quat::from_euler(EulerRot::ZYX, 0.0, yaw, pitch);
             transform.rotation = transform.rotation.lerp(target, 0.5);
 
-            options.pitch = Some(pitch);
-            options.yaw = Some(yaw);
+            controller.pitch = pitch;
+            controller.yaw = yaw;
         }
     }
 }

@@ -5,6 +5,12 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = []
+trace = [
+    "bevy/trace_chrome"
+]
+
 [dependencies]
 bevy = { version = "0.6.0", default-features = false, features = [
     "bevy_render",
@@ -14,6 +20,7 @@ bevy-inspector-egui = { version = "0.7.1" }
 [dev-dependencies]
 bevy = { version = "0.6.0", default-features = true }
 bevy-inspector-egui = { version = "0.7.1" }
+bevy_rapier3d = { path = "../bevy_rapier/bevy_rapier3d" }
 
 #[patch.crates-io]
 #bevy = { git = "https://github.com/bevyengine/bevy", branch = "main" }

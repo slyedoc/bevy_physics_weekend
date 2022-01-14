@@ -1,18 +1,20 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
+#![allow(unused_imports)]
+#![allow(clippy::type_complexity)]
 
-mod body;
-mod shapes;
 mod bounds;
+mod colliders;
+mod rigid_body;
 
 use std::borrow::BorrowMut;
 
-use shapes::*;
 use bevy::prelude::*;
-use body::*;
+use colliders::*;
+use rigid_body::*;
 
 pub mod prelude {
-    pub use crate::{body::*, shapes::*, PhysicsPlugin};
+    pub use crate::{colliders::*, rigid_body::*, PhysicsPlugin};
 }
 
 /// The names of egui systems.
@@ -45,103 +47,147 @@ impl Plugin for PhysicsPlugin {
 fn update_system(
     gravity: Res<Gravity>,
     time: Res<Time>,
-    mut query: Query<(Entity, &mut Body, &mut Transform)>,
+    mut query: Query<(Entity, &mut RigidBody, &mut Transform)>,
 ) {
     let dt = time.delta_seconds();
     let mut count = 0;
 
-    // apply gravity
-    for (_, mut body, _) in query.iter_mut() {
-        count += 1;
-        if body.inv_mass != 0.0 {
-            // gravity needs to be an impulse
-            // I = dp, F = dp/dt => dp = F * dt => I = F * dt
-            // F = mgs
-            let mass = 1.0 / body.inv_mass;
-            let impluse_gravity = gravity.0 * mass * dt;
-            body.apply_impulse_linear(impluse_gravity);
+    #[cfg(feature = "trace")]
+    let gravity_span = info_span!("gravity_span", name = "gravity_span");
+    {
+        #[cfg(feature = "trace")]
+        let _guard = gravity_span.enter();
+        // apply gravity
+        for (_, mut body, _) in query.iter_mut() {
+            count += 1;
+            if body.inv_mass != 0.0 {
+                // gravity needs to be an impulse
+                // I = dp, F = dp/dt => dp = F * dt => I = F * dt
+                // F = mgs
+                let mass = 1.0 / body.inv_mass;
+                let impluse_gravity = gravity.0 * mass * dt;
+                body.apply_impulse_linear(impluse_gravity);
+            }
         }
     }
 
     //
     // Broadphase
     //
-    let collision_pairs = broadphase( &mut query, count, dt);
+    let collision_pairs = broadphase(&mut query, count, dt);
 
     //
     // Narrowphase (perform actual collision detection)
     //
 
-    // find contacts collisions
-    let mut contacts = Vec::new();
-    for pair in collision_pairs {
-        // SAFETY: There is no way for a and b to the same    
-        // see https://github.com/bevyengine/bevy/issues/2042
-        unsafe {
-            let (_, mut body_a, mut transform_a) = query.get_unchecked(pair.a).unwrap();
-            let (_, mut body_b, mut transform_b) = query.get_unchecked(pair.b).unwrap();
-            if let Some(contact) = intersect_test(pair.a, &mut body_a, &mut transform_a, pair.b, &mut body_b, &mut transform_b, dt) {
-                contacts.push(contact)
+    #[cfg(feature = "trace")]
+    let narrowphase_span = info_span!("narrowphase_span", name = "narrowphase_span");
+    {
+        #[cfg(feature = "trace")]
+        let guard = narrowphase_span.enter();
+
+        // find contacts collisions
+        let mut contacts = Vec::new();
+        for pair in collision_pairs {
+            // SAFETY: There is no way for a and b to the same entity
+            // see https://github.com/bevyengine/bevy/issues/2042
+            unsafe {
+                let (_, mut body_a, mut transform_a) = query.get_unchecked(pair.a).unwrap();
+                let (_, mut body_b, mut transform_b) = query.get_unchecked(pair.b).unwrap();
+                if let Some(contact) = intersect_test(
+                    pair.a,
+                    &mut body_a,
+                    &mut transform_a,
+                    pair.b,
+                    &mut body_b,
+                    &mut transform_b,
+                    dt,
+                ) {
+                    contacts.push(contact)
+                }
+            }
+        }
+
+        // sort the times of impact from earliest to latest
+        contacts.sort_by(|a, b| {
+            if a.time_of_impact < b.time_of_impact {
+                std::cmp::Ordering::Less
+            } else if a.time_of_impact == b.time_of_impact {
+                std::cmp::Ordering::Equal
+            } else {
+                std::cmp::Ordering::Greater
+            }
+        });
+
+        // Apply Ballistic impulses
+        let mut accumulated_time = 0.0;
+        for contact in contacts {
+            let contact_time = contact.time_of_impact - accumulated_time;
+
+            // position update
+            for (_, mut body, mut transform) in query.iter_mut() {
+                body.update(&mut transform, contact_time)
+            }
+
+            // SAFETY: There is no way to safey access the query twice at the same time I am aware of
+            // Should be safe since entity a and b can't be the same
+            // see https://github.com/bevyengine/bevy/issues/2042
+            unsafe {
+                let (_, mut body_a, mut transform_a) =
+                    query.get_unchecked(contact.entity_a).unwrap();
+                let (_, mut body_b, mut transform_b) =
+                    query.get_unchecked(contact.entity_b).unwrap();
+                resolve_contact(
+                    contact,
+                    &mut body_a,
+                    &mut transform_a,
+                    &mut body_b,
+                    &mut transform_b,
+                );
+            }
+            accumulated_time += contact_time;
+        }
+
+        // update positions for the rest of this frame's time
+        let time_remaining = dt - accumulated_time;
+        if time_remaining > 0.0 {
+            for (_, mut body, mut transform) in query.iter_mut() {
+                body.update(&mut transform, time_remaining)
             }
         }
     }
-
-    // sort the times of impact from earliest to latest
-    contacts.sort_by(|a, b| {
-        if a.time_of_impact < b.time_of_impact {
-            std::cmp::Ordering::Less
-        } else if a.time_of_impact == b.time_of_impact {
-            std::cmp::Ordering::Equal
-        } else {
-            std::cmp::Ordering::Greater
-        }
-    });
-
-
-    // Apply Ballistic impulses
-    let mut accumulated_time = 0.0;
-    for contact in contacts {
-        let contact_time = contact.time_of_impact - accumulated_time;
-
-        // position update
-        for (_, mut body, mut transform) in query.iter_mut() {
-            body.update( &mut transform, contact_time)
-        }
-
-        // SAFETY: There is no way to safey access the query twice at the same time I am aware of
-        // Should be safe since entity a and b can't be the same
-        // see https://github.com/bevyengine/bevy/issues/2042
-        unsafe {
-            let (_, mut body_a, mut transform_a) = query.get_unchecked(contact.entity_a).unwrap();
-            let (_, mut body_b, mut transform_b) = query.get_unchecked(contact.entity_b).unwrap();
-            resolve_contact(contact, &mut body_a, &mut transform_a, &mut body_b, &mut transform_b);
-        }
-        accumulated_time += contact_time;
-    }
-
-    // update positions for the rest of this frame's time
-    let time_remaining = dt - accumulated_time;
-    if time_remaining > 0.0 {
-        for (_, mut body, mut transform) in query.iter_mut() {
-            body.update( &mut transform, time_remaining)
-        }
-    }
 }
 
-fn broadphase(query: &mut Query<(Entity, &mut Body, &mut Transform)>, count: usize,  dt: f32) -> Vec<CollisionPair> {
+fn broadphase(
+    query: &mut Query<(Entity, &mut RigidBody, &mut Transform)>,
+    count: usize,
+    dt: f32,
+) -> Vec<CollisionPair> {
+    #[cfg(feature = "trace")]
+    let span = info_span!("broadphase", name = "broadphase");
+    #[cfg(feature = "trace")]
+    let _guard = span.enter();
     sweep_and_prune_1d(query, count, dt)
 }
 
-fn sweep_and_prune_1d(query: &mut Query<(Entity, &mut Body, &mut Transform)>, count: usize, dt: f32) -> Vec<CollisionPair> {
-    let sorted_bodies = sort_bodies_bounds( query, count, dt);
+fn sweep_and_prune_1d(
+    query: &mut Query<(Entity, &mut RigidBody, &mut Transform)>,
+    count: usize,
+    dt: f32,
+) -> Vec<CollisionPair> {
+    let sorted_bodies = sort_bodies_bounds(query, count, dt);
     build_pairs(&sorted_bodies)
 }
 
-fn sort_bodies_bounds(query: &mut Query<(Entity, &mut Body, &mut Transform)>, count: usize, dt: f32) -> Vec<PsuedoBody> {
+fn sort_bodies_bounds(
+    query: &mut Query<(Entity, &mut RigidBody, &mut Transform)>,
+    count: usize,
+    dt: f32,
+) -> Vec<PsuedoBody> {
     let mut sorted_bodies = Vec::<PsuedoBody>::with_capacity(count * 2);
     let axis = Vec3::ONE.normalize();
     for (i, (entity, body, t)) in query.iter_mut().enumerate() {
-        let mut bounds = body.shape.bounds(&t);
+        let mut bounds = body.collider.bounds(&t);
 
         // expand the bounds by the linear velocity
         bounds.expand_by_point(bounds.mins + body.linear_velocity * dt);
@@ -297,11 +343,11 @@ fn sphere_sphere_dynamic(
 
 pub fn intersect_test(
     a: Entity,
-    body_a: &mut Body,
-    transform_a:  &mut Transform,
+    body_a: &mut RigidBody,
+    transform_a: &mut Transform,
     b: Entity,
-    body_b:  &mut Body,
-    transform_b:  &mut Transform,
+    body_b: &mut RigidBody,
+    transform_b: &mut Transform,
     dt: f32,
 ) -> Option<ContactEvent> {
     // skip body pairs with infinite mass
@@ -310,12 +356,11 @@ pub fn intersect_test(
     }
 
     // test for intersections, fire contact event if necessary
-    let shape_a = body_a.shape.clone();
-    let shape_b = body_b.shape.clone();
-    let shapes = ( shape_a, shape_b);
+    let shapes = (body_a.collider.shape, body_b.collider.shape);
     match shapes {
-        (Shape::Sphere( ShapeSphere { radius: radius_a }), Shape::Sphere( ShapeSphere { radius: radius_b })) => {
-
+        (ShapeType::Sphere, ShapeType::Sphere) => {
+            let radius_a = body_a.collider.bounds.maxs.x;
+            let radius_b = body_b.collider.bounds.maxs.x;
             if let Some((world_point_a, world_point_b, time_of_impact)) = sphere_sphere_dynamic(
                 radius_a,
                 radius_b,
@@ -325,9 +370,8 @@ pub fn intersect_test(
                 body_b.linear_velocity,
                 dt,
             ) {
-
                 // step bodies forward to get local space collision points
-                body_a.update( transform_a, time_of_impact);
+                body_a.update(transform_a, time_of_impact);
                 body_b.update(transform_b, time_of_impact);
 
                 // convert world space contacts to local space
@@ -337,8 +381,8 @@ pub fn intersect_test(
                 let normal = (transform_a.translation - transform_b.translation).normalize();
 
                 // unwind time step
-                body_a.update( transform_a, -time_of_impact);
-                body_b.update( transform_b, -time_of_impact);
+                body_a.update(transform_a, -time_of_impact);
+                body_b.update(transform_b, -time_of_impact);
 
                 // calculate the separation distance
                 let ab = transform_a.translation - transform_b.translation;
@@ -359,22 +403,22 @@ pub fn intersect_test(
                 None
             }
         }
-        (Shape::Sphere(_), Shape::Box(_)) => todo!(),
-        (Shape::Sphere(_), Shape::Convex(_)) => todo!(),
-        (Shape::Box(_), Shape::Sphere(_)) => todo!(),
-        (Shape::Box(_), Shape::Box(_)) => todo!(),
-        (Shape::Box(_), Shape::Convex(_)) => todo!(),
-        (Shape::Convex(_), Shape::Sphere(_)) => todo!(),
-        (Shape::Convex(_), Shape::Box(_)) => todo!(),
-        (Shape::Convex(_), Shape::Convex(_)) => todo!(),
+        (ShapeType::Sphere, ShapeType::Box) => todo!(),
+        (ShapeType::Sphere, ShapeType::Convex) => todo!(),
+        (ShapeType::Box, ShapeType::Sphere) => todo!(),
+        (ShapeType::Box, ShapeType::Box) => todo!(),
+        (ShapeType::Box, ShapeType::Convex) => todo!(),
+        (ShapeType::Convex, ShapeType::Sphere) => todo!(),
+        (ShapeType::Convex, ShapeType::Box) => todo!(),
+        (ShapeType::Convex, ShapeType::Convex) => todo!(),
     }
 }
 
 fn resolve_contact(
     contact: ContactEvent,
-    body_a:  &mut Body,
+    body_a: &mut RigidBody,
     transform_a: &mut Transform,
-    body_b: &mut Body,
+    body_b: &mut RigidBody,
     transform_b: &mut Transform,
 ) {
     let elasticity = body_a.elasticity * body_b.elasticity;
@@ -421,7 +465,7 @@ fn resolve_contact(
     let reduced_mass = 1.0 / (total_inv_mass + inv_inertia);
     let impluse_friction = velocity_tangent * (reduced_mass * friction);
 
-    // TODO: Book didnt have this if check, but I was getitng velocity_tangent of zero leading to 
+    // TODO: Book didnt have this if check, but I was getitng velocity_tangent of zero leading to
     // a Vec3 Nan when normalized if perfectly lined up on ground
     if !impluse_friction.is_nan() {
         // apply kinetic friction

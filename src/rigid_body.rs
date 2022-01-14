@@ -1,52 +1,48 @@
-use std::sync::Arc;
 
-use crate::shapes::*;
+use crate::colliders::*;
 use bevy::prelude::*;
 
 #[derive(Component)]
-pub struct Body {
+pub struct RigidBody {
     pub linear_velocity: Vec3,
     pub angular_velocity: Vec3,
     pub inv_mass: f32,
-    pub shape: Shape,
+    pub collider: Collider,
     pub elasticity: f32, // min = 0.0, max = 1.0
     pub friction: f32, // min = 0.0, max = 1.0
 }
 
-impl Default for Body {
+impl Default for RigidBody {
     fn default() -> Self {
         Self {
             linear_velocity: Vec3::default(),
             angular_velocity: Vec3::default(),
             inv_mass: 1.0,
-            shape: Shape::default() ,
+            collider: Collider::default() ,
             elasticity: 0.5,
             friction: 0.5,
         }
     }
 }
 
-impl Body {
-
+impl RigidBody {
 
     pub fn get_centre_of_mass_world(&self, t: &Transform) -> Vec3 {
-        t.translation + t.rotation * self.shape.centre_of_mass()
+        t.translation + t.rotation * self.collider.center_of_mass
     }
 
     pub fn world_to_local(&self, t: &Transform, world_point: Vec3) -> Vec3 {
         let tmp = world_point - self.get_centre_of_mass_world(t);
         let inv_orientation = t.rotation.conjugate();
-        let body_space = inv_orientation * tmp;
-        body_space
+        inv_orientation * tmp
     }
 
     pub fn local_to_world(&self, t: &Transform, body_point: Vec3) -> Vec3 {
-        let world_point = self.get_centre_of_mass_world(t) + t.rotation * body_point;
-        world_point
+        self.get_centre_of_mass_world(t) + t.rotation * body_point
     }
 
     pub fn get_inv_inertia_tensor_local(&self) -> Mat3 {
-        self.shape.inertia_tensor().inverse() * self.inv_mass
+        self.collider.inertia_tensor.inverse() * self.inv_mass
     }
 
     pub fn get_inv_inertia_tensor_world(&self, t: &Transform) -> Mat3 {
@@ -112,7 +108,7 @@ impl Body {
         // T = Ia = w x I * w
         // a = I^-1 (w x I * w)
         let orientation = Mat3::from_quat(transform.rotation);
-        let inertia_tensor = orientation * self.shape.inertia_tensor() * orientation.transpose();
+        let inertia_tensor = orientation * self.collider.inertia_tensor * orientation.transpose();
         let alpha = inertia_tensor.inverse()
             * (self
                 .angular_velocity
