@@ -74,8 +74,8 @@ fn init_camera_controller(
     mut query: Query<(&Transform, &mut CameraController), (Added<CameraController>, With<Camera>)>,
 ) {
     for (transform, mut controller) in query.iter_mut() {
-        let (yaw, pitch, _roll) = yaw_pitch_roll(transform.rotation);
-        info!("yaw: {:?}, pitch: {:?}", yaw, pitch);
+        // TODO: pretty sure controller uses of pitch and yaw is flipped
+        let (pitch, yaw, _roll) = yaw_pitch_roll(transform.rotation);
         controller.pitch = pitch;
         controller.yaw = yaw;
     }
@@ -97,8 +97,6 @@ fn update_camera_controller(
             continue;
         }
 
-        info!("yaw: {:?}, pitch: {:?}", controller.yaw, controller.pitch);
-        
         // Handle key input
         let mut axis_input = Vec3::ZERO;
         if key_input.pressed(controller.key_forward) {

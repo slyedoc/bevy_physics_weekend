@@ -1,18 +1,14 @@
-/// Rapier Example
 mod helper;
-use helper::*;
 use bevy::prelude::*;
-use bevy_inspector_egui::{ InspectorPlugin};
-use bevy_rapier3d::prelude::*;
+use bevy_inspector_egui::InspectorPlugin;
+use bevy_physics_weekend::prelude::*;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(HelperPlugins)
-        // Rapier
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
-        //.add_plugin(RapierRenderPlugin)
-        .add_plugin(InspectorPlugin::<BallStackConfig>::new())
+        .add_plugins(helper::HelperPlugins)
+        // our plugin
+        .add_plugin(PhysicsPlugin)
         .add_startup_system(setup)
         .add_system(setup_level)
         .run();
@@ -22,49 +18,37 @@ fn setup_level(
     mut ev_reset: EventReader<helper::ResetEvent>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    stack_config: Res<helper::BallStackConfig>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     for _ in ev_reset.iter() {
         info!("Reset");
 
-        // spheres stack
+        // ball
         let mesh = meshes.add(Mesh::from(bevy::render::mesh::shape::UVSphere {
             radius: 1.0,
-            sectors: stack_config.ball_sectors,
-            stacks: stack_config.ball_stacks,
+            sectors: 5,
+            stacks: 5,
         }));
 
-        for i in 0..stack_config.level_size {
-            for j in 0..stack_config.level_size {
-                for k in 0..stack_config.level_size {
-                    let pos = Vec3::new(i as f32 * stack_config.offset, j as f32 * stack_config.offset, k as f32 * stack_config.offset);
-                    commands
-                        .spawn_bundle(PbrBundle {
-                            transform: Transform::from_translation(pos),
-                            mesh: mesh.clone(),
-                            material: stack_config.ball_material.clone(),
-                            ..Default::default()
-                        })
-                        .insert_bundle(RigidBodyBundle {
-                            position: pos.into(),
-                            velocity: RigidBodyVelocity {
-                                linvel: Vec3::new(1.0, 2.0, 3.0).into(), // a little velocity to start a fall
-                                angvel: Vec3::new(0.2, 0.0, 0.0).into(),
-                            }
-                            .into(),
-                            ..RigidBodyBundle::default()
-                        })
-                        .insert_bundle(ColliderBundle {
-                            shape: ColliderShape::ball(1.0).into(),
-                            ..ColliderBundle::default()
-                        })
-                        //.insert(ColliderDebugRender::with_id(0))
-                        .insert(ColliderPositionSync::Discrete)
-                        .insert(helper::Reset)
-                        .insert(Name::new("Sphere"));
-                }
-            }
-        }
+        commands
+        .spawn_bundle(PbrBundle {
+            transform: Transform::from_translation(pos),
+            mesh: mesh.clone(),
+            material: materials.add(StandardMaterial {
+                base_color: Color::rgb(0.5, 0.5, 0.5),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+        .insert(RigidBody {
+            collider: Collider::from(Sphere { radius: 1.0 }),
+            inv_mass: 1.0,
+            elasticity: 1.0,
+            friction: 0.5,
+            ..Default::default()
+        })
+        .insert(helper::Reset)
+        .insert(Name::new("Sphere"));
     }
 }
 

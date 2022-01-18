@@ -10,13 +10,12 @@ The 3 books have already been ported to bevy by Bitshifter [here](https://github
 
 ## Status
 
-Finished the first book and a few chapters into book 2.  I had planned to refactor into more rust like code after all 3 books.  Going to start that now because it already a bit too painful to use.
-
-Going to start comparing with rapier directly, if its slower even in the simple cases what's the point.
+A few chapters into book 2.  
+Add rapier example for compairson.
 
 ## Why
 
-I have been playing with bevy for a while now and the only real option you have for physics is [Rapier](https://github.com/dimforge/rapier), either though [bevy_rapier](https://github.com/dimforge/bevy_rapier) or [heron](https://github.com/jcornaz/heron).  While rapier is truly amazing, it's not made for bevy, it uses its own math lib [nalgebra](https://github.com/dimforge/nalgebra) while bevy uses [glam](https://github.com/bitshifter/glam-rs).  This leads to needing to load data in and out every frame since they don't share types.  
+I have been playing with bevy for a while now and the only real option you have for physics is [Rapier](https://github.com/dimforge/rapier), either though [bevy_rapier](https://github.com/dimforge/bevy_rapier) or [heron](https://github.com/jcornaz/heron).  While rapier is truly amazing, it's not made for bevy, it uses its own math lib [nalgebra](https://github.com/dimforge/nalgebra) while bevy uses [glam](https://github.com/bitshifter/glam-rs).  This leads to needing to load data in and out every frame since they don't share types.
 
 ## Goal
 
@@ -24,4 +23,4 @@ Learn about physics engines.
 
 The aims to provide a simple bevy physics plugin that's completely native to bevy.
 
-This will never be as feature rich as rapier.
+This will never be as feature rich as rapier and likely slower.

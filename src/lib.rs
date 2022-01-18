@@ -2,10 +2,11 @@
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 #![allow(clippy::type_complexity)]
-
+mod constraints;
 mod bounds;
 mod colliders;
 mod rigid_body;
+mod math;
 
 use std::borrow::BorrowMut;
 
@@ -14,7 +15,7 @@ use colliders::*;
 use rigid_body::*;
 
 pub mod prelude {
-    pub use crate::{colliders::*, rigid_body::*, PhysicsPlugin};
+    pub use crate::{colliders::*, rigid_body::*, constraints::*, PhysicsPlugin};
 }
 
 /// The names of egui systems.
@@ -424,11 +425,11 @@ fn resolve_contact(
     let elasticity = body_a.elasticity * body_b.elasticity;
     let total_inv_mass = body_a.inv_mass + body_b.inv_mass;
 
-    let inv_inertia_world_a = body_a.get_inv_inertia_tensor_world(transform_a);
-    let inv_inertia_world_b = body_b.get_inv_inertia_tensor_world(transform_b);
+    let inv_inertia_world_a = body_a.inv_inertia_tensor_world(transform_a);
+    let inv_inertia_world_b = body_b.inv_inertia_tensor_world(transform_b);
 
-    let ra = contact.world_point_a - body_a.get_centre_of_mass_world(transform_a);
-    let rb = contact.world_point_b - body_b.get_centre_of_mass_world(transform_b);
+    let ra = contact.world_point_a - body_a.centre_of_mass_world(transform_a);
+    let rb = contact.world_point_b - body_b.centre_of_mass_world(transform_b);
 
     let angular_j_a = (inv_inertia_world_a * ra.cross(contact.normal)).cross(ra);
     let angular_j_b = (inv_inertia_world_b * rb.cross(contact.normal)).cross(rb);

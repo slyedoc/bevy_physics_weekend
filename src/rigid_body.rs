@@ -27,26 +27,26 @@ impl Default for RigidBody {
 
 impl RigidBody {
 
-    pub fn get_centre_of_mass_world(&self, t: &Transform) -> Vec3 {
+    pub fn centre_of_mass_world(&self, t: &Transform) -> Vec3 {
         t.translation + t.rotation * self.collider.center_of_mass
     }
 
     pub fn world_to_local(&self, t: &Transform, world_point: Vec3) -> Vec3 {
-        let tmp = world_point - self.get_centre_of_mass_world(t);
+        let tmp = world_point - self.centre_of_mass_world(t);
         let inv_orientation = t.rotation.conjugate();
         inv_orientation * tmp
     }
 
     pub fn local_to_world(&self, t: &Transform, body_point: Vec3) -> Vec3 {
-        self.get_centre_of_mass_world(t) + t.rotation * body_point
+        self.centre_of_mass_world(t) + t.rotation * body_point
     }
 
-    pub fn get_inv_inertia_tensor_local(&self) -> Mat3 {
+    pub fn inv_inertia_tensor_local(&self) -> Mat3 {
         self.collider.inertia_tensor.inverse() * self.inv_mass
     }
 
-    pub fn get_inv_inertia_tensor_world(&self, t: &Transform) -> Mat3 {
-        let inv_inertia_tensor = self.get_inv_inertia_tensor_local();
+    pub fn inv_inertia_tensor_world(&self, t: &Transform) -> Mat3 {
+        let inv_inertia_tensor = self.inv_inertia_tensor_local();
         let orientation = Mat3::from_quat(t.rotation);
         orientation * inv_inertia_tensor * orientation.transpose()
     }
@@ -59,7 +59,7 @@ impl RigidBody {
         // impulse is in world space direction and magnitude of the impulse
         self.apply_impulse_linear(impulse);
 
-        let position = self.get_centre_of_mass_world(t); // aplying impluses must produce torgues though the center of mass
+        let position = self.centre_of_mass_world(t); // aplying impluses must produce torgues though the center of mass
         let r = impulse_point - position;
         let dl = r.cross(impulse); // this is in world space
         self.apply_impulse_angular(dl, t);
@@ -74,7 +74,7 @@ impl RigidBody {
         // => dv = J / m
         self.linear_velocity += impulse * self.inv_mass;
     }
-    pub fn apply_impulse_angular(&mut self, impulse: Vec3, t: &mut Transform) {
+    pub fn apply_impulse_angular(&mut self, impulse: Vec3, t: &Transform) {
         if self.inv_mass == 0.0 {
             return;
         }
@@ -82,7 +82,7 @@ impl RigidBody {
         // L = I w = r x p
         // dL = I dw = r x J
         // => dw = I^-1 * (r x J)
-        self.angular_velocity += self.get_inv_inertia_tensor_world(t) * impulse;
+        self.angular_velocity += self.inv_inertia_tensor_world(t) * impulse;
 
         // clamp angular_velocity - 30 rad/s is fast enough for us
         const MAX_ANGULAR_SPEED: f32 = 30.0;
@@ -99,7 +99,7 @@ impl RigidBody {
         // we have an angular velocity around the centre of mass, this needs to be converted to
         // relative body translation. This way we can properly update the rotation of the model
 
-        let position_com = self.get_centre_of_mass_world(transform);
+        let position_com = self.centre_of_mass_world(transform);
         let com_to_position = transform.translation - position_com;
 
         // total torque is equal to external applied torques + internal torque (precession)
