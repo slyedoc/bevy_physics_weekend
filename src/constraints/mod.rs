@@ -48,17 +48,11 @@ pub trait Constraint: Send + Sync {
     fn post_solve(&mut self) {}
 }
 
+#[derive(Default)]
 pub struct ConstraintArena {
     constraints: Vec<Box<dyn Constraint>>,
 }
 
-impl Default for ConstraintArena {
-    fn default() -> Self {
-        ConstraintArena {
-            constraints: Vec::new(),
-        }
-    }
-}
 
 impl ConstraintArena {
     pub fn clear(&mut self) {

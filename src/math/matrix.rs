@@ -112,9 +112,9 @@ impl<const M: usize, const P: usize, const N: usize> Mul<MatMN<P, N>> for MatMN<
     }
 }
 
-#[test]
-fn test_matmn() {
-    let m0 = MatMN::from(&[[1., 2.], [3., 4.], [5., 6.]]);
-    let m1 = m0.transpose();
-    assert_eq!(m1, MatMN::from(&[[1., 3., 5.], [2., 4., 6.]]));
-}
+// #[test]
+// fn test_matmn() {
+//     let m0 = MatMN::from(&[[1., 2.], [3., 4.], [5., 6.]]);
+//     let m1 = m0.transpose();
+//     assert_eq!(m1, MatMN::from(&[[1., 3., 5.], [2., 4., 6.]]));
+// }
