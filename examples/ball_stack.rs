@@ -46,7 +46,7 @@ fn setup_level(
                             material: stack_config.ball_material.clone(),
                             ..Default::default()
                         })
-                        .insert(RigidBody {
+                        .insert(Body {
                             collider: Collider::from(Sphere { radius: 1.0 }),
                             inv_mass: 1.0,
                             elasticity: 1.0,
@@ -94,7 +94,7 @@ fn setup(
             }),
             ..Default::default()
         })
-        .insert(RigidBody {
+        .insert(Body {
             inv_mass: 0.0,
             collider: Collider::from(Sphere {
                 radius: ground_radius,

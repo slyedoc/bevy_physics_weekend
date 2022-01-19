@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use super::{Constraint, ConstraintConfig};
 use crate::{
     math::{lcp_gauss_seidel, MatMN, MatN, VecN},
-    prelude::RigidBody,
+    prelude::Body,
 };
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -40,7 +40,7 @@ impl ConstraintPenetration {
 impl Constraint for ConstraintPenetration {
     fn pre_solve(
         &mut self,
-        bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>,
+        bodies: &mut Query<(Entity, &mut Body, &mut Transform)>,
         dt_sec: f32,
     ) {
         unsafe {
@@ -162,7 +162,7 @@ impl Constraint for ConstraintPenetration {
         }
     }
 
-    fn solve(&mut self, bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>) {
+    fn solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>) {
         let jacobian_transpose = self.jacobian.transpose();
 
         // build the system of equations

@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use super::{Constraint, ConstraintConfig};
 use crate::{
     math::{lcp_gauss_seidel, MatMN, MatN, VecN},
-    prelude::RigidBody,
+    prelude::Body,
 };
 
 pub struct ConstraintDistance {
@@ -27,7 +27,7 @@ impl ConstraintDistance {
 impl Constraint for ConstraintDistance {
     fn pre_solve(
         &mut self,
-        bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>,
+        bodies: &mut Query<(Entity, &mut Body, &mut Transform)>,
         dt_sec: f32,
     ) {
         unsafe {
@@ -86,7 +86,7 @@ impl Constraint for ConstraintDistance {
         }
     }
 
-    fn solve(&mut self, bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>) {
+    fn solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>) {
         let jacobian_transpose = self.jacobian.transpose();
 
         // build the system of equations

@@ -3,7 +3,7 @@ use crate::colliders::*;
 use bevy::prelude::*;
 
 #[derive(Component)]
-pub struct RigidBody {
+pub struct Body {
     pub linear_velocity: Vec3,
     pub angular_velocity: Vec3,
     pub inv_mass: f32,
@@ -12,7 +12,7 @@ pub struct RigidBody {
     pub friction: f32, // min = 0.0, max = 1.0
 }
 
-impl Default for RigidBody {
+impl Default for Body {
     fn default() -> Self {
         Self {
             linear_velocity: Vec3::default(),
@@ -25,7 +25,10 @@ impl Default for RigidBody {
     }
 }
 
-impl RigidBody {
+impl Body {
+    pub fn has_infinite_mass(&self) -> bool {
+        self.inv_mass == 0.0
+    }
 
     pub fn centre_of_mass_world(&self, t: &Transform) -> Vec3 {
         t.translation + t.rotation * self.collider.center_of_mass

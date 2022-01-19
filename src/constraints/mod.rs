@@ -9,7 +9,7 @@ mod constraint_penetration;
 
 use crate::{
     math::{MatMN, VecN},
-    rigid_body::RigidBody,
+    body::Body,
 };
 use bevy::prelude::*;
 use constraint_constant_velocity::ConstraintConstantVelocityLimited;
@@ -41,10 +41,10 @@ pub fn quat_right(q: Quat) -> Mat4 {
 pub trait Constraint: Send + Sync {
     fn pre_solve(
         &mut self,
-        query: &mut Query<(Entity, &mut RigidBody, &mut Transform)>,
+        query: &mut Query<(Entity, &mut Body, &mut Transform)>,
         dt_sec: f32,
     );
-    fn solve(&mut self, bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>);
+    fn solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>);
     fn post_solve(&mut self) {}
 }
 
@@ -61,7 +61,7 @@ impl ConstraintArena {
 
     pub fn add_orientation_constraint(
         &mut self,
-        bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>,
+        bodies: &mut Query<(Entity, &mut Body, &mut Transform)>,
         handle_a: Entity,
         handle_b: Entity,
     ) {
@@ -86,7 +86,7 @@ impl ConstraintArena {
 
     pub fn add_distance_constraint(
         &mut self,
-        bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>,
+        bodies: &mut Query<(Entity, &mut Body, &mut Transform)>,
         handle_a: Entity,
         handle_b: Entity,
     ) {
@@ -114,7 +114,7 @@ impl ConstraintArena {
 
     pub fn add_hinge_constraint(
         &mut self,
-        bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>,
+        bodies: &mut Query<(Entity, &mut Body, &mut Transform)>,
         handle_a: Entity,
         handle_b: Entity,
         world_space_anchor: Vec3,
@@ -143,7 +143,7 @@ impl ConstraintArena {
 
     pub fn add_constant_velocity_constraint(
         &mut self,
-        bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>,
+        bodies: &mut Query<(Entity, &mut Body, &mut Transform)>,
         handle_a: Entity,
         handle_b: Entity,
         world_space_anchor: Vec3,
@@ -173,7 +173,7 @@ impl ConstraintArena {
 
     pub fn add_constraint_motor(
         &mut self,
-        bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>,
+        bodies: &mut Query<(Entity, &mut Body, &mut Transform)>,
         handle_a: Entity,
         handle_b: Entity,
         world_space_anchor: Vec3,
@@ -202,7 +202,7 @@ impl ConstraintArena {
     }
     }
 
-    pub fn add_constraint_mover(&mut self, _bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>, handle_a: Entity) {
+    pub fn add_constraint_mover(&mut self, _bodies: &mut Query<(Entity, &mut Body, &mut Transform)>, handle_a: Entity) {
         self.constraints
             .push(Box::new(ConstraintMoverSimple::new(ConstraintConfig {
                 handle_a: Some(handle_a),
@@ -210,13 +210,13 @@ impl ConstraintArena {
             })))
     }
 
-    pub fn pre_solve(&mut self, bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>, dt_sec: f32) {
+    pub fn pre_solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>, dt_sec: f32) {
         for constraint in &mut self.constraints {
             constraint.pre_solve(bodies, dt_sec);
         }
     }
 
-    pub fn solve(&mut self, bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>) {
+    pub fn solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>) {
         for constraint in &mut self.constraints {
             constraint.solve(bodies);
         }
@@ -257,7 +257,7 @@ impl Default for ConstraintConfig {
 impl ConstraintConfig {
     fn get_inverse_mass_matrix(
         &self,
-        bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>,
+        bodies: &mut Query<(Entity, &mut Body, &mut Transform)>,
     ) -> MatMN<12, 12> {
         let mut inv_mass_matrix = MatMN::zero();
 
@@ -294,7 +294,7 @@ impl ConstraintConfig {
         inv_mass_matrix
     }
 
-    fn get_velocities(&self, bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>) -> VecN<12> {
+    fn get_velocities(&self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>) -> VecN<12> {
         let mut q_dt = VecN::zero();
 
         {
@@ -327,7 +327,7 @@ impl ConstraintConfig {
 
     fn apply_impulses(
         &self,
-        bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>,
+        bodies: &mut Query<(Entity, &mut Body, &mut Transform)>,
         impulses: VecN<12>,
     ) {
         {

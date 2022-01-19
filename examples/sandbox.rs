@@ -32,7 +32,7 @@ fn setup_level(
 
         commands
         .spawn_bundle(PbrBundle {
-            transform: Transform::from_translation(pos),
+            transform: Transform::from_translation(Vec3::ZERO),
             mesh: mesh.clone(),
             material: materials.add(StandardMaterial {
                 base_color: Color::rgb(0.5, 0.5, 0.5),
@@ -40,7 +40,7 @@ fn setup_level(
             }),
             ..Default::default()
         })
-        .insert(RigidBody {
+        .insert(Body {
             collider: Collider::from(Sphere { radius: 1.0 }),
             inv_mass: 1.0,
             elasticity: 1.0,
@@ -75,30 +75,31 @@ fn setup(
     let ground_size = 200.1;
     let ground_height = 0.1;
     let ground_pos = Vec3::new(0.0, -ground_height, 0.0);
+    let ground_box = shape::Box {
+        min_x: -ground_size,
+        max_x: ground_size,
+        min_y: -ground_height,
+        max_y: ground_height,
+        min_z: -ground_size,
+        max_z: ground_size,
+    };
     commands
         .spawn()
         .insert_bundle(PbrBundle {
             transform: Transform::from_translation(ground_pos),
-            mesh: meshes.add(Mesh::from(bevy::render::mesh::shape::Box {
-                min_x: -ground_size,
-                max_x: ground_size,
-                min_y: -ground_height,
-                max_y: ground_height,
-                min_z: -ground_size,
-                max_z: ground_size,
-            })),
+            mesh: meshes.add(ground_box.into() ),
             material: materials.add(StandardMaterial {
                 base_color: Color::GREEN,
                 ..Default::default()
             }),
             ..Default::default()
         })
-        .insert_bundle(ColliderBundle {
-            shape: ColliderShape::cuboid(ground_size, ground_height, ground_size).into(),
-            position: ground_pos.into(),
-            ..ColliderBundle::default()
+        .insert(Body {
+            collider: ground_box.into(),
+            inv_mass: 1.0,
+            elasticity: 1.0,
+            friction: 0.5,
+            ..Default::default()
         })
-        //.insert(ColliderDebugRender::default())
-        .insert(ColliderPositionSync::Discrete)
         .insert(Name::new("Ground"));
 }

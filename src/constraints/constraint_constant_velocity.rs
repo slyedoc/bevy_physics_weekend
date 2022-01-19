@@ -1,7 +1,7 @@
 use super::{quat_left, quat_right, Constraint, ConstraintConfig};
 use crate::{
     math::{lcp_gauss_seidel, MatMN, MatN, VecN},
-    prelude::RigidBody,
+    prelude::Body,
 };
 use bevy::prelude::*;
 
@@ -29,7 +29,7 @@ impl ConstraintConstantVelocity {
 impl Constraint for ConstraintConstantVelocity {
     fn pre_solve(
         &mut self,
-        bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>,
+        bodies: &mut Query<(Entity, &mut Body, &mut Transform)>,
         dt_sec: f32,
     ) {
         unsafe {
@@ -127,7 +127,7 @@ impl Constraint for ConstraintConstantVelocity {
         }
     }
 
-    fn solve(&mut self, bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>) {
+    fn solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>) {
         let jacobian_transpose = self.jacobian.transpose();
 
         // build the system of equations
@@ -198,7 +198,7 @@ impl ConstraintConstantVelocityLimited {
 impl Constraint for ConstraintConstantVelocityLimited {
     fn pre_solve(
         &mut self,
-        bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>,
+        bodies: &mut Query<(Entity, &mut Body, &mut Transform)>,
         dt_sec: f32,
     ) {
         unsafe {
@@ -357,7 +357,7 @@ impl Constraint for ConstraintConstantVelocityLimited {
         }
     }
 
-    fn solve(&mut self, bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>) {
+    fn solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>) {
         let jacobian_transpose = self.jacobian.transpose();
 
         // build the system of equations

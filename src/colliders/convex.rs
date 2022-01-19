@@ -1,7 +1,7 @@
 use crate::bounds::Bounds;
 use bevy::{math::{Mat3, Vec3}, prelude::Transform};
 
-use super::{Collider, ShapeType};
+use super::{Collider, ShapeType, Tri};
 
 #[derive(Clone, Debug)]
 pub struct Convex {
@@ -16,11 +16,11 @@ impl From<Convex> for Collider {
             center_of_mass: Vec3::ZERO,
             inertia_tensor: Mat3::ZERO,
             bounds: value.bounds,
+            points: vec![],
             shape: ShapeType::Convex,
         }
     }
 }
-
 
 
 
@@ -85,13 +85,6 @@ fn find_point_furthest_from_triangle(pts: &[Vec3], a: Vec3, b: Vec3, c: Vec3) ->
         }
     }
     pts[max_idx]
-}
-
-#[derive(Clone, Copy, Debug)]
-struct Tri {
-    a: u32,
-    b: u32,
-    c: u32,
 }
 
 fn build_tetrahedron(verts: &[Vec3], hull_points: &mut Vec<Vec3>, hull_tris: &mut Vec<Tri>) {

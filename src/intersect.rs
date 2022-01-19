@@ -1,13 +1,104 @@
 use bevy::prelude::*;
 
-use crate::prelude::{RigidBody, ContactEvent, ShapeType};
+use crate::prelude::{Body, ContactEvent, ShapeType};
+use crate::gjk::{gjk_does_intersect, gjk_closest_points};
+
+fn intersect_static(
+    entity_a: Entity,
+    body_a: &mut Body,
+    transform_a: &mut Transform,
+    entity_b: Entity,
+    body_b: &mut Body,
+    transform_b: &mut Transform,
+) -> (ContactEvent, bool) {
+    match (body_a.collider.shape, body_b.collider.shape) {
+        (ShapeType::Sphere { radius: radius_a}, ShapeType::Sphere {radius: radius_b} ) => {
+            let pos_a = transform_a.translation;
+            let pos_b = transform_b.translation;
+
+            if let Some((world_point_a, world_point_b)) =
+                sphere_sphere_static(radius_a, radius_b, pos_a, pos_b)
+            {
+                (
+                    ContactEvent {
+                        entity_a,
+                        entity_b,
+                        world_point_a,
+                        world_point_b,
+                        local_point_a: body_a.world_to_local(&transform_a, world_point_a),
+                        local_point_b: body_b.world_to_local(&transform_b, world_point_b),
+                        normal: (pos_a - pos_b).normalize(),
+                        separation_dist: (world_point_a - world_point_b).length(),
+                        time_of_impact: 0.0,
+                    },
+                    true,
+                )
+            } else {
+                (
+                    ContactEvent {
+                        entity_a,
+                        entity_b,
+                        world_point_a: Vec3::ZERO,
+                        world_point_b: Vec3::ZERO,
+                        local_point_a: Vec3::ZERO,
+                        local_point_b: Vec3::ZERO,
+                        normal: Vec3::X,
+                        separation_dist: 0.0,
+                        time_of_impact: 0.0,
+                    },
+                    false,
+                )
+            }
+        }
+        (_, _) => {
+            const BIAS: f32 = 0.001;
+            if let Some((mut world_point_a, mut world_point_b)) =
+                gjk_does_intersect(body_a, transform_a, body_b, transform_b, BIAS)
+            {
+                let normal = (world_point_b - world_point_a).normalize_or_zero();
+                world_point_a -= normal * BIAS;
+                world_point_b += normal * BIAS;
+                (
+                    ContactEvent {
+                        entity_a,
+                        entity_b,
+                        world_point_a,
+                        world_point_b,
+                        local_point_a: body_a.world_to_local(transform_a, world_point_a),
+                        local_point_b: body_b.world_to_local(transform_b, world_point_b),
+                        normal,
+                        separation_dist: -(world_point_a - world_point_b).length(),
+                        time_of_impact: 0.0,
+                    },
+                    true,
+                )
+            } else {
+                let (world_point_a, world_point_b) = gjk_closest_points(body_a, transform_a, body_b, transform_b);
+                (
+                    ContactEvent {
+                        entity_a,
+                        entity_b,
+                        world_point_a,
+                        world_point_b,
+                        local_point_a: body_a.world_to_local(transform_a, world_point_a),
+                        local_point_b: body_b.world_to_local(transform_b, world_point_b),
+                        normal: Vec3::ZERO,
+                        separation_dist: (world_point_a - world_point_b).length(),
+                        time_of_impact: 0.0,
+                    },
+                    false,
+                )
+            }
+        }
+    }
+}
 
 pub fn intersect_dynamic(
-    a: Entity,
-    body_a: &mut RigidBody,
+    entity_a: Entity,
+    body_a: &mut Body,
     transform_a: &mut Transform,
-    b: Entity,
-    body_b: &mut RigidBody,
+    entity_b: Entity,
+    body_b: &mut Body,
     transform_b: &mut Transform,
     dt: f32,
 ) -> Option<ContactEvent> {
@@ -19,9 +110,7 @@ pub fn intersect_dynamic(
     // test for intersections, fire contact event if necessary
     let shapes = (body_a.collider.shape, body_b.collider.shape);
     match shapes {
-        (ShapeType::Sphere, ShapeType::Sphere) => {
-            let radius_a = body_a.collider.bounds.maxs.x;
-            let radius_b = body_b.collider.bounds.maxs.x;
+        (ShapeType::Sphere { radius: radius_a} , ShapeType::Sphere { radius: radius_b}) => {
             if let Some((world_point_a, world_point_b, time_of_impact)) = sphere_sphere_dynamic(
                 radius_a,
                 radius_b,
@@ -57,22 +146,86 @@ pub fn intersect_dynamic(
                     normal,
                     separation_dist,
                     time_of_impact,
-                    entity_a: a,
-                    entity_b: b,
+                    entity_a,
+                    entity_b,
                 })
             } else {
                 None
             }
         }
-        (ShapeType::Sphere, ShapeType::Box) => todo!(),
-        (ShapeType::Sphere, ShapeType::Convex) => todo!(),
-        (ShapeType::Box, ShapeType::Sphere) => todo!(),
-        (ShapeType::Box, ShapeType::Box) => todo!(),
-        (ShapeType::Box, ShapeType::Convex) => todo!(),
-        (ShapeType::Convex, ShapeType::Sphere) => todo!(),
-        (ShapeType::Convex, ShapeType::Box) => todo!(),
-        (ShapeType::Convex, ShapeType::Convex) => todo!(),
+        (_, _) => {
+            // use GJK to perform conservative advancement
+            conservative_advance(entity_a, body_a, transform_a,  entity_b, body_b, transform_b, dt)
+
+        },
     }
+}
+
+
+fn conservative_advance(
+    entity_a: Entity,
+    body_a: &mut Body,
+    transform_a: &mut Transform,
+    entity_b: Entity,
+    body_b: &mut Body,
+    transform_b: &mut Transform,
+    mut dt: f32,
+) -> Option<ContactEvent> {
+    let mut toi = 0.0;
+    let mut num_iters = 0;
+
+    // advance the positions of the bodies until they touch or there's not time left
+    while dt > 0.0 {
+        // check for intersection
+        let (mut contact, did_intersect) = intersect_static(entity_a, body_a, transform_a, entity_b, body_b, transform_b);
+        if did_intersect {
+            contact.time_of_impact = toi;
+            body_a.update(transform_a, -toi);
+            body_b.update(transform_b, -toi);
+            return Some(contact);
+        }
+
+        num_iters += 1;
+        if num_iters > 10 {
+            break;
+        }
+
+        // get the vector from the closest point on A to the closest point on B
+        let ab = (contact.world_point_b - contact.world_point_a).normalize_or_zero();
+
+        // project the relative velocity onto the ray of shortest distance
+        let relative_velocity = body_a.linear_velocity - body_b.linear_velocity;
+        let mut ortho_speed = relative_velocity.dot(ab);
+
+        // add to the ortho_speed the maximum angular speeds of the relative shapes
+        let angular_speed_a = body_a
+            .collider
+            .fastest_linear_speed(body_a.angular_velocity, ab);
+        let angular_speed_b = body_b
+            .collider
+            .fastest_linear_speed(body_b.angular_velocity, -ab);
+        ortho_speed += angular_speed_a + angular_speed_b;
+
+        if ortho_speed <= 0.0 {
+            break;
+        }
+
+        let time_to_go = contact.separation_dist / ortho_speed;
+        if time_to_go > dt {
+            break;
+        }
+
+        dt -= time_to_go;
+        toi += time_to_go;
+        body_a.update(transform_a,time_to_go);
+        body_b.update(transform_b,time_to_go);
+    }
+
+    // unwind the clock
+    body_a.update(transform_a,-toi);
+    body_b.update(transform_b,-toi);
+
+    None
 }
 
 pub fn ray_sphere_intersect(
@@ -96,6 +249,25 @@ pub fn ray_sphere_intersect(
         let t1 = inv_a * (b - delta_root);
         let t2 = inv_a * (b + delta_root);
         Some((t1, t2))
+    }
+}
+
+pub fn sphere_sphere_static(
+    radius_a: f32,
+    radius_b: f32,
+    pos_a: Vec3,
+    pos_b: Vec3,
+) -> Option<(Vec3, Vec3)> {
+    let ab = pos_b - pos_a;
+    let radius_ab = radius_a + radius_b;
+    let length_squared = ab.length_squared();
+    if length_squared < radius_ab * radius_ab {
+        let norm = ab.normalize_or_zero();
+        let pt_on_a = pos_a + norm * radius_a;
+        let pt_on_b = pos_b - norm * radius_b;
+        Some((pt_on_a, pt_on_b))
+    } else {
+        None
     }
 }
 

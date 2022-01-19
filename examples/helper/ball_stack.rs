@@ -26,8 +26,8 @@ impl FromWorld for BallStackConfig {
         Self {
             level_size: 10,
             offset: 3.0,
-            ball_sectors: 4,
-            ball_stacks: 4,
+            ball_sectors: 8,
+            ball_stacks: 8,
 
             ball_material: materials.add(StandardMaterial {
                 base_color_texture: Some(asset_server.load("checker_red.png")),

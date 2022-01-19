@@ -1,7 +1,7 @@
 use super::{quat_left, quat_right, Constraint, ConstraintConfig};
 use crate::{
     math::{lcp_gauss_seidel, MatMN, MatN, VecN},
-    rigid_body::RigidBody,
+    body::Body,
 };
 use bevy::prelude::*;
 
@@ -30,7 +30,7 @@ impl ConstraintMotor {
 impl Constraint for ConstraintMotor {
     fn pre_solve(
         &mut self,
-        bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>,
+        bodies: &mut Query<(Entity, &mut Body, &mut Transform)>,
         dt_sec: f32,
     ) {
         unsafe {
@@ -183,7 +183,7 @@ impl Constraint for ConstraintMotor {
         }
     }
 
-    fn solve(&mut self, bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>) {
+    fn solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>) {
         let (_, body_a, trans_a) = bodies.get_mut(self.config.handle_a.unwrap()).unwrap();
 
         let motor_axis = trans_a.rotation * self.motor_axis;

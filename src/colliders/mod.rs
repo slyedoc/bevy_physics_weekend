@@ -2,12 +2,11 @@ mod convex;
 
 pub use convex::Convex;
 
+use crate::bounds::Bounds;
 use bevy::{
     math::{Mat3, Vec3},
-    prelude::Transform,
+    prelude::{shape, Transform},
 };
-
-use crate::bounds::Bounds;
 
 #[derive(Clone, Debug)]
 pub struct Collider {
@@ -15,6 +14,7 @@ pub struct Collider {
     pub inertia_tensor: Mat3,
     pub bounds: Bounds,
     pub shape: ShapeType,
+    pub points: Vec<Vec3>,
 }
 
 impl Default for Collider {
@@ -25,7 +25,7 @@ impl Default for Collider {
 
 #[derive(Copy, Clone, Debug)]
 pub enum ShapeType {
-    Sphere,
+    Sphere{ radius: f32 },
     Box,
     Convex,
 }
@@ -33,13 +33,14 @@ pub enum ShapeType {
 impl Collider {
     pub fn bounds(&self, transform: &Transform) -> Bounds {
         match self.shape {
-            ShapeType::Sphere => {
-                Bounds {
-                    mins: self.bounds.mins + transform.translation,
-                    maxs: self.bounds.maxs + transform.translation,
-                }
+            ShapeType::Sphere { radius } => Bounds {
+                mins: -radius + transform.translation,
+                maxs: self.bounds.maxs + transform.translation,
             },
-            ShapeType::Box => todo!(),
+            ShapeType::Box => Bounds {
+                mins: self.bounds.mins + transform.translation,
+                maxs: self.bounds.maxs + transform.translation,
+            },
             ShapeType::Convex => todo!(),
         }
     }
@@ -47,24 +48,12 @@ impl Collider {
     // find the point in the furthest in direction
     pub fn support(&self, dir: Vec3, transform: &Transform, bias: f32) -> Vec3 {
         match self.shape {
-            ShapeType::Sphere => transform.translation + dir * (self.bounds.maxs.x + bias),
+            ShapeType::Sphere { radius} => transform.translation + dir * (radius + bias),
             ShapeType::Box => {
 
-                // TODO: shouldn't generate this each time, should be simpler way to find furthest point
-                let points = [
-                    Vec3::new(self.bounds.mins.x, self.bounds.mins.y, self.bounds.mins.z),
-                    Vec3::new(self.bounds.maxs.x, self.bounds.mins.y, self.bounds.mins.z),
-                    Vec3::new(self.bounds.mins.x, self.bounds.maxs.y, self.bounds.mins.z),
-                    Vec3::new(self.bounds.mins.x, self.bounds.mins.y, self.bounds.maxs.z),
-                    Vec3::new(self.bounds.maxs.x, self.bounds.maxs.y, self.bounds.maxs.z),
-                    Vec3::new(self.bounds.mins.x, self.bounds.maxs.y, self.bounds.maxs.z),
-                    Vec3::new(self.bounds.maxs.x, self.bounds.mins.y, self.bounds.maxs.z),
-                    Vec3::new(self.bounds.maxs.x, self.bounds.maxs.y, self.bounds.mins.z),
-                ];
-
-                let mut max_pt = (transform.rotation * points[0]) + transform.translation;
+                let mut max_pt = (transform.rotation * self.points[0]) + transform.translation;
                 let mut max_dist = dir.dot(max_pt);
-                for pt in &points[1..] {
+                for pt in &self.points[1..] {
                     let pt = (transform.rotation * *pt) + transform.translation;
                     let dist = dir.dot(pt);
                     if dist > max_dist {
@@ -74,14 +63,13 @@ impl Collider {
                 }
 
                 let norm = dir.normalize() * bias;
-                
                 max_pt + norm
             }
             ShapeType::Convex => todo!(),
         }
     }
     pub fn fastest_linear_speed(&self, _angular_velocity: Vec3, _dir: Vec3) -> f32 {
-         unimplemented!()
+        unimplemented!()
     }
 }
 
@@ -92,9 +80,7 @@ pub struct Sphere {
 
 impl Default for Sphere {
     fn default() -> Self {
-        Self {
-            radius: 1.0,
-        }
+        Self { radius: 1.0 }
     }
 }
 
@@ -110,20 +96,31 @@ impl From<Sphere> for Collider {
                 mins: Vec3::splat(-sphere.radius),
                 maxs: Vec3::splat(sphere.radius),
             },
-            shape: ShapeType::Sphere,
+            points: vec![Vec3::ZERO],
+            shape: ShapeType::Sphere { radius: sphere.radius } ,
         }
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct Box {
-    bounds: Bounds
-}
-
-impl From<Box> for Collider {
-    fn from(value: Box) -> Self {
+impl From<shape::Box> for Collider {
+    fn from(value: shape::Box) -> Self {
+        let points = vec![
+            Vec3::new(value.min_x, value.max_y, value.min_z),
+            Vec3::new(value.max_x, value.max_y, value.min_z),
+            Vec3::new(value.min_x, value.max_y, value.max_z),
+            Vec3::new(value.max_x, value.max_y, value.max_z),
+            Vec3::new(value.min_x, value.min_y, value.min_z),
+            Vec3::new(value.max_x, value.min_y, value.min_z),
+            Vec3::new(value.min_x, value.min_y, value.max_z),
+            Vec3::new(value.max_x, value.min_y, value.max_z),
+        ] ;
+        let bounds = Bounds {
+            mins: Vec3::new(value.min_x, value.min_y, value.min_z),
+            maxs: Vec3::new(value.max_x, value.max_y, value.max_z),
+        };
         // inertia tensor for box centered around zero
-        let d = value.bounds.maxs - value.bounds.mins;
+        let d = bounds.maxs - bounds.mins;
+
         let dd = d * d;
         let diagonal = Vec3::new(dd.y + dd.z, dd.x + dd.z, dd.x + dd.y) / 12.0;
         let tensor = Mat3::from_diagonal(diagonal);
@@ -131,7 +128,7 @@ impl From<Box> for Collider {
         // now we need to use the parallel axis theorem to get the ineria tensor for a box that is
         // not centered around the origin
 
-        let cm = (value.bounds.maxs + value.bounds.mins) * 0.5;
+        let cm = (bounds.maxs + bounds.mins) * 0.5;
 
         // the displacement from the center of mass to the origin
         let r = -cm;
@@ -149,9 +146,57 @@ impl From<Box> for Collider {
         Collider {
             center_of_mass: cm,
             inertia_tensor: tensor + pat_tensor,
-            bounds: value.bounds,
+            bounds,
+            points,
             shape: ShapeType::Box,
         }
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct Tri {
+    pub a: u32,
+    pub b: u32,
+    pub c: u32,
+}
+
+
+#[derive(Copy, Clone, Debug)]
+pub struct Edge {
+    pub a: u32,
+    pub b: u32,
+}
+
+impl PartialEq for Edge {
+    fn eq(&self, other: &Self) -> bool {
+        (self.a == other.a && self.b == other.b) || (self.a == other.b && self.b == other.a)
+    }
+}
+
+impl Eq for Edge {}
+
+// This will compare the incoming edge with all the edges in the facing tris and then return true
+// if it's unique.
+fn is_edge_unique(tris: &[Tri], facing_tris: &[u32], ignore_tri: u32, edge: &Edge) -> bool {
+    for &tri_idx in facing_tris {
+        if ignore_tri == tri_idx {
+            continue;
+        }
+
+        let tri = tris[tri_idx as usize];
+
+        let edges = [
+            Edge { a: tri.a, b: tri.b },
+            Edge { a: tri.b, b: tri.c },
+            Edge { a: tri.c, b: tri.a },
+        ];
+
+        for e in &edges {
+            if *edge == *e {
+                return false;
+            }
+        }
+    }
+
+    true
+}

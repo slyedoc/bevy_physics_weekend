@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::prelude::RigidBody;
+use crate::prelude::Body;
 
 use super::{Constraint, ConstraintConfig};
 
@@ -16,12 +16,12 @@ impl ConstraintMoverSimple {
 }
 
 impl Constraint for ConstraintMoverSimple {
-    fn pre_solve(&mut self, bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>, dt_sec: f32) {
+    fn pre_solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>, dt_sec: f32) {
         self.time += dt_sec;
         let (_, mut body_a, trans_a) = bodies.get_mut(self.config.handle_a.unwrap()).unwrap();
 
         body_a.linear_velocity.z = f32::cos(self.time * 0.25) * 4.0;
     }
 
-    fn solve(&mut self, _bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>) {}
+    fn solve(&mut self, _bodies: &mut Query<(Entity, &mut Body, &mut Transform)>) {}
 }

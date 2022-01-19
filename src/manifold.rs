@@ -2,7 +2,7 @@
 use crate::{
     constraints::{Constraint, ConstraintConfig, ConstraintPenetration},
     contact::ContactEvent,
-    prelude::RigidBody,
+    prelude::Body,
 };
 use bevy::prelude::*;
 
@@ -29,7 +29,7 @@ impl Manifold {
     }
 
     fn from_contact(
-        bodies: &Query<(Entity, &mut RigidBody, &mut Transform)>,
+        bodies: &Query<(Entity, &mut Body, &mut Transform)>,
         contact: ContactEvent,
     ) -> Self {
         let mut manifold = Self::new(contact.entity_a, contact.entity_b);
@@ -39,7 +39,7 @@ impl Manifold {
 
     fn add_contact(
         &mut self,
-        bodies: &Query<(Entity, &mut RigidBody, &mut Transform)>,
+        bodies: &Query<(Entity, &mut Body, &mut Transform)>,
         mut contact: ContactEvent,
     ) {
         // make sure the contact's body_a and body_b are of the correct order
@@ -135,7 +135,7 @@ impl Manifold {
 
     fn remove_expired_contacts(
         &mut self,
-        bodies: &Query<(Entity, &mut RigidBody, &mut Transform)>,
+        bodies: &Query<(Entity, &mut Body, &mut Transform)>,
     ) {
         // remove any contacts that have drifted too far
         let mut i = 0;
@@ -186,13 +186,13 @@ impl Manifold {
         &mut self.constraints[0..self.num_contacts as usize]
     }
 
-    fn pre_solve(&mut self, bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>, dt_sec: f32) {
+    fn pre_solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>, dt_sec: f32) {
         for constraint in self.constraints_as_mut_slice() {
             constraint.pre_solve(bodies, dt_sec);
         }
     }
 
-    fn solve(&mut self, bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>,) {
+    fn solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>,) {
         for constraint in self.constraints_as_mut_slice() {
             constraint.solve(bodies);
         }
@@ -220,7 +220,7 @@ pub struct ManifoldCollector {
 }
 
 impl ManifoldCollector {
-    pub fn add_contact(&mut self, bodies: &Query<(Entity, &mut RigidBody, &mut Transform)>, contact: ContactEvent) {
+    pub fn add_contact(&mut self, bodies: &Query<(Entity, &mut Body, &mut Transform)>, contact: ContactEvent) {
         // try to find the previously existing manifold for contacts between two bodies
         let mut found = None;
         for manifold in &mut self.manifolds {
@@ -243,7 +243,7 @@ impl ManifoldCollector {
         }
     }
 
-    pub fn remove_expired(&mut self, bodies: &Query<(Entity, &mut RigidBody, &mut Transform)>) {
+    pub fn remove_expired(&mut self, bodies: &Query<(Entity, &mut Body, &mut Transform)>) {
         for manifold in &mut self.manifolds {
             manifold.remove_expired_contacts(bodies);
         }
@@ -251,13 +251,13 @@ impl ManifoldCollector {
             .retain(|&manifold| manifold.num_contacts() > 0);
     }
 
-    pub fn pre_solve(&mut self, bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>, dt_sec: f32) {
+    pub fn pre_solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>, dt_sec: f32) {
         for manifold in &mut self.manifolds {
             manifold.pre_solve(bodies, dt_sec);
         }
     }
 
-    pub fn solve(&mut self, bodies: &mut Query<(Entity, &mut RigidBody, &mut Transform)>) {
+    pub fn solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>) {
         for manifold in &mut self.manifolds {
             manifold.solve(bodies);
         }
