@@ -68,8 +68,23 @@ impl Collider {
             ShapeType::Convex => todo!(),
         }
     }
-    pub fn fastest_linear_speed(&self, _angular_velocity: Vec3, _dir: Vec3) -> f32 {
-        unimplemented!()
+    pub fn fastest_linear_speed(&self, angular_velocity: Vec3, dir: Vec3) -> f32 {
+        match self.shape {
+            ShapeType::Sphere { .. } => 0.0,
+            ShapeType::Box => {
+                let mut max_speed = 0.0;
+                for pt in &self.points {
+                    let r = *pt - self.center_of_mass;
+                    let linear_velocity = angular_velocity.cross(r);
+                    let speed = dir.dot(linear_velocity);
+                    if speed > max_speed {
+                        max_speed = speed;
+                    }
+                }
+                max_speed
+            },
+            ShapeType::Convex => todo!(),
+        }
     }
 }
 

@@ -1,12 +1,18 @@
 /// Rapier Example
 mod helper;
-use helper::*;
 use bevy::prelude::*;
-use bevy_inspector_egui::{ InspectorPlugin};
+use bevy_inspector_egui::InspectorPlugin;
 use bevy_rapier3d::prelude::*;
+use helper::*;
 
+// TODO: Reset not working, see https://github.com/dimforge/bevy_rapier/issues/111
 fn main() {
     App::new()
+        .insert_resource(WindowDescriptor {
+            title: "Rapier Ball Stack".to_string(),
+            vsync: false,
+            ..Default::default()
+        })
         .add_plugins(DefaultPlugins)
         .add_plugins(HelperPlugins)
         // Rapier
@@ -29,41 +35,54 @@ fn setup_level(
 
         // spheres stack
         let mesh = meshes.add(Mesh::from(bevy::render::mesh::shape::UVSphere {
-            radius: 1.0,
+            radius: stack_config.ball_radius,
             sectors: stack_config.ball_sectors,
             stacks: stack_config.ball_stacks,
         }));
 
-        for i in 0..stack_config.level_size {
-            for j in 0..stack_config.level_size {
-                for k in 0..stack_config.level_size {
-                    let pos = Vec3::new(i as f32 * stack_config.offset, j as f32 * stack_config.offset, k as f32 * stack_config.offset);
-                    commands
-                        .spawn_bundle(PbrBundle {
-                            transform: Transform::from_translation(pos),
-                            mesh: mesh.clone(),
-                            material: stack_config.ball_material.clone(),
-                            ..Default::default()
-                        })
-                        .insert_bundle(RigidBodyBundle {
-                            position: pos.into(),
-                            velocity: RigidBodyVelocity {
-                                linvel: Vec3::new(1.0, 2.0, 3.0).into(), // a little velocity to start a fall
-                                angvel: Vec3::new(0.2, 0.0, 0.0).into(),
-                            }
-                            .into(),
-                            ..RigidBodyBundle::default()
-                        })
-                        .insert_bundle(ColliderBundle {
-                            shape: ColliderShape::ball(1.0).into(),
-                            ..ColliderBundle::default()
-                        })
-                        //.insert(ColliderDebugRender::with_id(0))
-                        .insert(ColliderPositionSync::Discrete)
-                        .insert(helper::Reset)
-                        .insert(Name::new("Sphere"));
-                }
+        let b2 = stack_config.base_size * stack_config.base_size;
+        let mut pos = Vec3::new(
+             0.0,
+             1.0,
+             0.0,
+        );
+        for i in 0..stack_config.count {
+            if i % stack_config.base_size == 0 {
+                pos.x = 0.0;
+                pos.z += stack_config.offset;
+            } else {
+                pos.x += stack_config.offset;
             }
+            if i % b2 == 0 {
+                pos.x = 0.0;
+                pos.z = 0.0;
+                pos.y += stack_config.offset;
+             }
+
+            commands
+                .spawn_bundle(PbrBundle {
+                    transform: Transform::from_translation(pos),
+                    mesh: mesh.clone(),
+                    material: stack_config.ball_material.clone(),
+                    ..Default::default()
+                })
+                .insert_bundle(RigidBodyBundle {
+                    position: pos.into(),
+                    // TODO: Remove this, a small impulse so its not a stable stack
+                    // velocity: RigidBodyVelocity {
+                    //     linvel: Vec3::new(0.1, 0.0, 0.0).into(), // a little velocity to start a fall
+                    //     angvel: Vec3::new(0.1, 0.0, 0.0).into(),
+                    // }
+                    ..Default::default()
+                })
+                .insert_bundle(ColliderBundle {
+                    shape: ColliderShape::ball(stack_config.ball_radius).into(),
+                    ..ColliderBundle::default()
+                })
+                //.insert(ColliderDebugRender::with_id(0))
+                .insert(ColliderPositionSync::Discrete)
+                .insert(helper::Reset)
+                .insert(Name::new("Ball"));
         }
     }
 }

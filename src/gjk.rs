@@ -211,6 +211,7 @@ fn signed_volume_1d(s1: Vec3, s2: Vec3) -> Vec2 {
 }
 
 fn compare_signs(a: f32, b: f32) -> i32 {
+    #[allow(clippy::if_same_then_else)]
     if a > 0.0 && b > 0.0 {
         1
     } else if a < 0.0 && b < 0.0 {
@@ -466,8 +467,6 @@ fn num_valids(lambdas: &Vec4) -> usize {
     num
 }
 
-
-
 fn epa_expand(
     body_a: &Body,
     transform_a: &Transform,
@@ -478,7 +477,7 @@ fn epa_expand(
 ) -> (Vec3, Vec3) {
     let mut points = Vec::new();
     let mut triangles = Vec::new();
-    let mut dangling_edges = Vec::new();
+
 
     let mut center = Vec3::ZERO;
     for &simplex_point in simplex_points {
@@ -533,7 +532,8 @@ fn epa_expand(
         }
 
         // Find dangling edges
-        find_dangling_edges(&mut dangling_edges, &triangles);
+        // TODO: Test reusing Vec<Edge>
+        let dangling_edges = find_dangling_edges( &triangles);
         if dangling_edges.is_empty() {
             break;
         }
@@ -663,9 +663,8 @@ fn remove_triangles_facing_point(pt: Vec3, triangles: &mut Vec<Tri>, points: &[P
     num_removed
 }
 
-fn find_dangling_edges(dangling_edges: &mut Vec<Edge>, triangles: &[Tri]) {
-    dangling_edges.clear();
-
+fn find_dangling_edges( triangles: &[Tri]) -> Vec<Edge> {
+    let mut dangling_edges =  Vec::new();
     for (i, tri) in triangles.iter().enumerate() {
         let edges = [
             Edge { a: tri.a, b: tri.b },
@@ -716,6 +715,7 @@ fn find_dangling_edges(dangling_edges: &mut Vec<Edge>, triangles: &[Tri]) {
             }
         }
     }
+    dangling_edges
 }
 
 // This borrows our signed volum code to perform the barycentric coordinates.

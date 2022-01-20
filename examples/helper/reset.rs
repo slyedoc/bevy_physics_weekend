@@ -1,4 +1,4 @@
-use bevy::{prelude::*};
+use bevy::prelude::*;
 
 pub struct ResetPlugin;
 
@@ -11,7 +11,7 @@ impl Plugin for ResetPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<ResetEvent>()
             .add_startup_system(setup)
-            .add_system_to_stage( CoreStage::First,  reset_level);
+            .add_system_to_stage( CoreStage::Update,  reset_level);
     }
 }
 
@@ -29,9 +29,8 @@ fn reset_level(
 ) {
     if input.just_pressed(KeyCode::R) {
         for e in q.iter() {
-            commands.entity(e).despawn_recursive();
+            commands.entity(e).despawn();
         }
-
         ev_reset.send(ResetEvent);
     }
 }

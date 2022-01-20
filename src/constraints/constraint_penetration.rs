@@ -185,8 +185,8 @@ impl Constraint for ConstraintPenetration {
 
         if self.friction > 0.0 {
             unsafe {
-                let (_, body_a, trans_a) = bodies.get_unchecked(self.config.handle_a.unwrap()).unwrap();
-                let (_, body_b, trans_b) = bodies.get_unchecked(self.config.handle_b.unwrap()).unwrap();
+                let (_, body_a, _trans_a) = bodies.get_unchecked(self.config.handle_a.unwrap()).unwrap();
+                let (_, body_b, _trans_b) = bodies.get_unchecked(self.config.handle_b.unwrap()).unwrap();
 
                 let umg = self.friction * 10.0 * 1.0 / (body_a.inv_mass + body_b.inv_mass);
                 let normal_force = (lambda_n[0] * self.friction).abs();

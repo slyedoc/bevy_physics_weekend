@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::prelude::{Body, ContactEvent, ShapeType};
+use crate::prelude::{Body, Contact, ShapeType};
 use crate::gjk::{gjk_does_intersect, gjk_closest_points};
 
 fn intersect_static(
@@ -10,7 +10,7 @@ fn intersect_static(
     entity_b: Entity,
     body_b: &mut Body,
     transform_b: &mut Transform,
-) -> (ContactEvent, bool) {
+) -> (Contact, bool) {
     match (body_a.collider.shape, body_b.collider.shape) {
         (ShapeType::Sphere { radius: radius_a}, ShapeType::Sphere {radius: radius_b} ) => {
             let pos_a = transform_a.translation;
@@ -20,13 +20,13 @@ fn intersect_static(
                 sphere_sphere_static(radius_a, radius_b, pos_a, pos_b)
             {
                 (
-                    ContactEvent {
+                    Contact {
                         entity_a,
                         entity_b,
                         world_point_a,
                         world_point_b,
-                        local_point_a: body_a.world_to_local(&transform_a, world_point_a),
-                        local_point_b: body_b.world_to_local(&transform_b, world_point_b),
+                        local_point_a: body_a.world_to_local(transform_a, world_point_a),
+                        local_point_b: body_b.world_to_local(transform_b, world_point_b),
                         normal: (pos_a - pos_b).normalize(),
                         separation_dist: (world_point_a - world_point_b).length(),
                         time_of_impact: 0.0,
@@ -35,7 +35,7 @@ fn intersect_static(
                 )
             } else {
                 (
-                    ContactEvent {
+                    Contact {
                         entity_a,
                         entity_b,
                         world_point_a: Vec3::ZERO,
@@ -59,7 +59,7 @@ fn intersect_static(
                 world_point_a -= normal * BIAS;
                 world_point_b += normal * BIAS;
                 (
-                    ContactEvent {
+                    Contact {
                         entity_a,
                         entity_b,
                         world_point_a,
@@ -75,7 +75,7 @@ fn intersect_static(
             } else {
                 let (world_point_a, world_point_b) = gjk_closest_points(body_a, transform_a, body_b, transform_b);
                 (
-                    ContactEvent {
+                    Contact {
                         entity_a,
                         entity_b,
                         world_point_a,
@@ -101,7 +101,7 @@ pub fn intersect_dynamic(
     body_b: &mut Body,
     transform_b: &mut Transform,
     dt: f32,
-) -> Option<ContactEvent> {
+) -> Option<Contact> {
     // skip body pairs with infinite mass
     if body_a.inv_mass == 0.0 && body_b.inv_mass == 0.0 {
         return None;
@@ -138,7 +138,7 @@ pub fn intersect_dynamic(
                 let ab = transform_a.translation - transform_b.translation;
                 let separation_dist = ab.length() - (radius_a + radius_b);
 
-                Some(ContactEvent {
+                Some(Contact {
                     world_point_a,
                     world_point_b,
                     local_point_a,
@@ -170,7 +170,7 @@ fn conservative_advance(
     body_b: &mut Body,
     transform_b: &mut Transform,
     mut dt: f32,
-) -> Option<ContactEvent> {
+) -> Option<Contact> {
     let mut toi = 0.0;
     let mut num_iters = 0;
 

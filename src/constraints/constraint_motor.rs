@@ -184,7 +184,7 @@ impl Constraint for ConstraintMotor {
     }
 
     fn solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>) {
-        let (_, body_a, trans_a) = bodies.get_mut(self.config.handle_a.unwrap()).unwrap();
+        let (_, _body_a, trans_a) = bodies.get_mut(self.config.handle_a.unwrap()).unwrap();
 
         let motor_axis = trans_a.rotation * self.motor_axis;
 

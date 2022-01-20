@@ -1,7 +1,7 @@
-use bevy::{math::Vec3, prelude::Entity};
+use bevy::{math::Vec3, prelude::{Entity, Component}};
 
-#[derive(Copy, Clone, Debug)]
-pub struct ContactEvent {
+#[derive(Component, Copy, Clone, Debug)]
+pub struct Contact {
     pub entity_a: Entity,
     pub entity_b: Entity,
     pub world_point_a: Vec3,
@@ -13,7 +13,7 @@ pub struct ContactEvent {
     pub time_of_impact: f32,
 }
 
-impl Default for ContactEvent {
+impl Default for Contact {
     fn default() -> Self {
         Self {
             entity_a: Entity::from_raw(0),

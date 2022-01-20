@@ -1,16 +1,113 @@
 #![allow(dead_code)]
 use crate::{
     constraints::{Constraint, ConstraintConfig, ConstraintPenetration},
-    contact::ContactEvent,
+    contact::Contact,
     prelude::Body,
+    AddManifold,
 };
 use bevy::prelude::*;
 
 const MAX_CONTACTS: usize = 4;
 
-#[derive(Copy, Clone, Debug)]
-struct Manifold {
-    contacts: [ContactEvent; MAX_CONTACTS],
+pub fn manifold_add_system(
+    mut commands: Commands,
+    bodies: Query<(Entity, &mut Body, &mut Transform)>,
+    mut add_event: EventReader<AddManifold>,
+    mut query: Query<&mut Manifold>,
+) {
+    for AddManifold(mut contact) in add_event.iter() {
+        // try to find the previously existing manifold for contacts between two bodies
+        let mut found = None;
+        for manifold in &mut query.iter_mut() {
+            #[allow(clippy::suspicious_operation_groupings)]
+            let has_a =
+                manifold.handle_a == contact.entity_a || manifold.handle_b == contact.entity_a;
+            #[allow(clippy::suspicious_operation_groupings)]
+            let has_b =
+                manifold.handle_a == contact.entity_b || manifold.handle_b == contact.entity_b;
+            if has_a && has_b {
+                found = Some(manifold);
+                break;
+            }
+        }
+
+        if let Some(mut manifold) = found {
+            manifold.add_contact(&bodies, &mut contact);
+        } else {
+            commands
+                .spawn()
+                .insert(Manifold::from_contact(&bodies, &mut contact))
+                .insert(Name::new("Manifold"));
+        }
+    }
+}
+
+pub fn manifold_remove_expired(
+    mut commands: Commands,
+    bodies: Query<(&Body, &Transform)>,
+    mut query: Query<(Entity, &mut Manifold)>,
+) {
+    for (e, mut manifold) in &mut query.iter_mut() {
+        // remove any contacts that have drifted too far
+        let mut i = 0;
+        while i < manifold.num_contacts as usize {
+            let contact = &manifold.contacts[i];
+            unsafe {
+                if let Ok((body_a, trans_a)) = bodies.get_unchecked(contact.entity_a) {
+                    if let Ok((body_b, trans_b)) = bodies.get_unchecked(contact.entity_b) {
+                        // get the tangential distance of the point on a and the point on b
+                        let a = body_a.local_to_world(trans_a, contact.local_point_a);
+                        let b = body_b.local_to_world(trans_b, contact.local_point_b);
+
+                        let mut normal = manifold.constraints[i].normal();
+                        normal = trans_a.rotation * normal;
+
+                        // calculate the tangential separation and penetration depth
+                        let ab = b - a;
+                        let penetration_depth = normal.dot(ab);
+                        let ab_normal = normal * penetration_depth;
+                        let ab_tangent = ab - ab_normal;
+
+                        // if the tangential displacement is less than a specific threshold, it's okay to keep
+                        // it.
+                        const DISTANCE_THRESHOLD: f32 = 0.02;
+                        if ab_tangent.length_squared() < DISTANCE_THRESHOLD * DISTANCE_THRESHOLD
+                            && penetration_depth <= 0.0
+                        {
+                            i += 1;
+                            continue;
+                        }
+
+                        // this contact has moved beyond its threshold and should be removed
+                        for j in i..(MAX_CONTACTS - 1) {
+                            manifold.constraints[j] = manifold.constraints[j + 1];
+                            manifold.contacts[j] = manifold.contacts[j + 1];
+                            if j >= manifold.num_contacts as usize {
+                                manifold.constraints[j].clear_cached_lambda();
+                            }
+                        }
+
+                        manifold.num_contacts -= 1;
+                    } else {
+                        warn!("Missing Entity A - Removing Manifold");
+                        commands.entity(e).despawn();
+                    }
+                } else {
+                    warn!("Missing Entity B - Removing Manifold");
+                    commands.entity(e).despawn();
+                }
+            }
+        }
+        if manifold.num_contacts == 0 {
+            commands.entity(e).despawn();
+        }
+    }
+    //info!("Manifolds: {}", count);
+}
+
+#[derive(Component, Copy, Clone, Debug)]
+pub struct Manifold {
+    contacts: [Contact; MAX_CONTACTS],
     num_contacts: u8,
     handle_a: Entity,
     handle_b: Entity,
@@ -20,7 +117,7 @@ struct Manifold {
 impl Manifold {
     fn new(handle_a: Entity, handle_b: Entity) -> Self {
         Self {
-            contacts: [ContactEvent::default(); MAX_CONTACTS],
+            contacts: [Contact::default(); MAX_CONTACTS],
             num_contacts: 0,
             handle_a,
             handle_b,
@@ -30,7 +127,7 @@ impl Manifold {
 
     fn from_contact(
         bodies: &Query<(Entity, &mut Body, &mut Transform)>,
-        contact: ContactEvent,
+        contact: &mut Contact,
     ) -> Self {
         let mut manifold = Self::new(contact.entity_a, contact.entity_b);
         manifold.add_contact(bodies, contact);
@@ -40,7 +137,7 @@ impl Manifold {
     fn add_contact(
         &mut self,
         bodies: &Query<(Entity, &mut Body, &mut Transform)>,
-        mut contact: ContactEvent,
+        contact: &mut Contact,
     ) {
         // make sure the contact's body_a and body_b are of the correct order
         if contact.entity_a != self.handle_a || contact.entity_b != self.handle_b {
@@ -108,77 +205,27 @@ impl Manifold {
             }
         }
 
-        self.contacts[new_slot] = contact;
+        self.contacts[new_slot] = *contact;
 
         // TODO: might be cheaper to reused existing constraint rather than memcpying a new one
         unsafe {
             let (_, _, trans_a) = bodies.get_unchecked(self.handle_a).unwrap();
 
-        let mut normal = trans_a.rotation.inverse() * -contact.normal;
-        normal = normal.normalize();
-        self.constraints[new_slot] = ConstraintPenetration::new(
-            ConstraintConfig {
-                handle_a: Some(contact.entity_a),
-                handle_b: Some(contact.entity_b),
-                anchor_a: contact.local_point_a,
-                anchor_b: contact.local_point_b,
-                ..ConstraintConfig::default()
-            },
-            normal,
-        );
-
-    }
+            let mut normal = trans_a.rotation.inverse() * -contact.normal;
+            normal = normal.normalize();
+            self.constraints[new_slot] = ConstraintPenetration::new(
+                ConstraintConfig {
+                    handle_a: Some(contact.entity_a),
+                    handle_b: Some(contact.entity_b),
+                    anchor_a: contact.local_point_a,
+                    anchor_b: contact.local_point_b,
+                    ..ConstraintConfig::default()
+                },
+                normal,
+            );
+        }
         if new_slot == self.num_contacts as usize {
             self.num_contacts += 1;
-        }
-    }
-
-    fn remove_expired_contacts(
-        &mut self,
-        bodies: &Query<(Entity, &mut Body, &mut Transform)>,
-    ) {
-        // remove any contacts that have drifted too far
-        let mut i = 0;
-        while i < self.num_contacts as usize {
-            let contact = &self.contacts[i];
-            unsafe {
-                let (_, body_a, trans_a) = bodies.get_unchecked(contact.entity_a).unwrap();
-                let (_, body_b, trans_b) = bodies.get_unchecked(contact.entity_b).unwrap();
-
-
-                // get the tangential distance of the point on a and the point on b
-                let a = body_a.local_to_world(&trans_a, contact.local_point_a);
-                let b = body_b.local_to_world(&trans_b, contact.local_point_b);
-
-                let mut normal = self.constraints[i].normal();
-                normal = trans_a.rotation * normal;
-
-                // calculate the tangential separation and penetration depth
-                let ab = b - a;
-                let penetration_depth = normal.dot(ab);
-                let ab_normal = normal * penetration_depth;
-                let ab_tangent = ab - ab_normal;
-
-                // if the tangential displacement is less than a specific threshold, it's okay to keep
-                // it.
-                const DISTANCE_THRESHOLD: f32 = 0.02;
-                if ab_tangent.length_squared() < DISTANCE_THRESHOLD * DISTANCE_THRESHOLD
-                    && penetration_depth <= 0.0
-                {
-                    i += 1;
-                    continue;
-                }
-
-                // this contact has moved beyond its threshold and should be removed
-                for j in i..(MAX_CONTACTS - 1) {
-                    self.constraints[j] = self.constraints[j + 1];
-                    self.contacts[j] = self.contacts[j + 1];
-                    if j >= self.num_contacts as usize {
-                        self.constraints[j].clear_cached_lambda();
-                    }
-                }
-            }
-            self.num_contacts -= 1;
         }
     }
 
@@ -186,30 +233,34 @@ impl Manifold {
         &mut self.constraints[0..self.num_contacts as usize]
     }
 
-    fn pre_solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>, dt_sec: f32) {
+    pub fn pre_solve(
+        &mut self,
+        bodies: &mut Query<(Entity, &mut Body, &mut Transform)>,
+        dt_sec: f32,
+    ) {
         for constraint in self.constraints_as_mut_slice() {
             constraint.pre_solve(bodies, dt_sec);
         }
     }
 
-    fn solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>,) {
+    pub fn solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>) {
         for constraint in self.constraints_as_mut_slice() {
             constraint.solve(bodies);
         }
     }
 
-    fn post_solve(&mut self) {
+    pub fn post_solve(&mut self) {
         for constraint in self.constraints_as_mut_slice() {
             constraint.post_solve();
         }
     }
 
-    fn contact(&self, index: usize) -> &ContactEvent {
+    pub fn contact(&self, index: usize) -> &Contact {
         assert!(index < MAX_CONTACTS as usize);
         &self.contacts[index]
     }
 
-    fn num_contacts(&self) -> usize {
+    pub fn num_contacts(&self) -> usize {
         self.num_contacts as usize
     }
 }
@@ -220,38 +271,11 @@ pub struct ManifoldCollector {
 }
 
 impl ManifoldCollector {
-    pub fn add_contact(&mut self, bodies: &Query<(Entity, &mut Body, &mut Transform)>, contact: ContactEvent) {
-        // try to find the previously existing manifold for contacts between two bodies
-        let mut found = None;
-        for manifold in &mut self.manifolds {
-            #[allow(clippy::suspicious_operation_groupings)]
-            let has_a =
-                manifold.handle_a == contact.entity_a || manifold.handle_b == contact.entity_a;
-            #[allow(clippy::suspicious_operation_groupings)]
-            let has_b =
-                manifold.handle_a == contact.entity_b || manifold.handle_b == contact.entity_b;
-            if has_a && has_b {
-                found = Some(manifold);
-                break;
-            }
-        }
-
-        if let Some(manifold) = found {
-            manifold.add_contact(bodies, contact);
-        } else {
-            self.manifolds.push(Manifold::from_contact(bodies, contact));
-        }
-    }
-
-    pub fn remove_expired(&mut self, bodies: &Query<(Entity, &mut Body, &mut Transform)>) {
-        for manifold in &mut self.manifolds {
-            manifold.remove_expired_contacts(bodies);
-        }
-        self.manifolds
-            .retain(|&manifold| manifold.num_contacts() > 0);
-    }
-
-    pub fn pre_solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>, dt_sec: f32) {
+    pub fn pre_solve(
+        &mut self,
+        bodies: &mut Query<(Entity, &mut Body, &mut Transform)>,
+        dt_sec: f32,
+    ) {
         for manifold in &mut self.manifolds {
             manifold.pre_solve(bodies, dt_sec);
         }

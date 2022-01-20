@@ -1,5 +1,5 @@
 use crate::bounds::Bounds;
-use bevy::{math::{Mat3, Vec3}, prelude::Transform};
+use bevy::math::{Mat3, Vec3};
 
 use super::{Collider, ShapeType, Tri};
 
@@ -363,9 +363,9 @@ fn calculate_center_of_mass(pts: &[Vec3], tris: &[Tri]) -> Vec3 {
 
     for i in 0..NUM_SAMPLES {
         let x = bounds.mins.x + dv.x * i as f32;
-        for j in 0..NUM_SAMPLES {
+        for _ in 0..NUM_SAMPLES {
             let y = bounds.mins.y + dv.y as f32;
-            for k in 0..NUM_SAMPLES {
+            for _ in 0..NUM_SAMPLES {
                 let z = bounds.mins.z + dv.z as f32;
                 let pt = Vec3::new(x, y, z);
                 if is_external(pts, tris, pt) {
@@ -394,9 +394,9 @@ fn calculate_inertia_tensor(pts: &[Vec3], tris: &[Tri], cm: Vec3) -> Mat3 {
 
     for i in 0..NUM_SAMPLES {
         let x = bounds.mins.x + dv.x * i as f32;
-        for j in 0..NUM_SAMPLES {
+        for _ in 0..NUM_SAMPLES {
             let y = bounds.mins.y + dv.y as f32;
-            for k in 0..NUM_SAMPLES {
+            for _ in 0..NUM_SAMPLES {
                 let z = bounds.mins.z + dv.z as f32;
                 let mut pt = Vec3::new(x, y, z);
                 if is_external(pts, tris, pt) {

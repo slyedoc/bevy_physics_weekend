@@ -229,7 +229,7 @@ impl ConstraintArena {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Default, Clone, Debug)]
 pub struct ConstraintConfig {
     pub handle_a: Option<Entity>,
     pub handle_b: Option<Entity>,
@@ -239,19 +239,6 @@ pub struct ConstraintConfig {
 
     pub anchor_b: Vec3, // the anchor location in body_b's space
     pub axis_b: Vec3,   // the axis direction in body_b's space
-}
-
-impl Default for ConstraintConfig {
-    fn default() -> Self {
-        Self {
-            handle_a: None,
-            handle_b: None,
-            anchor_a: Default::default(),
-            axis_a: Default::default(),
-            anchor_b: Default::default(),
-            axis_b: Default::default(),
-        }
-    }
 }
 
 impl ConstraintConfig {
@@ -298,7 +285,7 @@ impl ConstraintConfig {
         let mut q_dt = VecN::zero();
 
         {
-            let (_, body_a, trans_a) = bodies.get_mut(self.handle_a.unwrap()).unwrap();
+            let (_, body_a, _trans_a) = bodies.get_mut(self.handle_a.unwrap()).unwrap();
   
 
             q_dt[0] = body_a.linear_velocity.x;
@@ -311,7 +298,7 @@ impl ConstraintConfig {
         }
 
         {
-            let (_, body_b, trans_b) = bodies.get_mut(self.handle_b.unwrap()).unwrap();
+            let (_, body_b, _trans_b) = bodies.get_mut(self.handle_b.unwrap()).unwrap();
 
             q_dt[6] = body_b.linear_velocity.x;
             q_dt[7] = body_b.linear_velocity.y;

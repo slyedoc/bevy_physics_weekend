@@ -5,11 +5,17 @@ use bevy_physics_weekend::prelude::*;
 
 fn main() {
     App::new()
+        .insert_resource(WindowDescriptor {
+            title: "Physics Ball Stack".to_string(),
+            vsync: false, // just for testing
+            ..Default::default()
+        })
         .add_plugins(DefaultPlugins)
         .add_plugins(helper::HelperPlugins)
         // our plugin
         .add_plugin(PhysicsPlugin)
-        .add_plugin(InspectorPlugin::<helper::BallStackConfig>::new()) // has to be after inspector plugin
+        .add_plugin(InspectorPlugin::<helper::BallStackConfig>::new())
+        .add_plugin(InspectorPlugin::<PhysicsConfig>::new()) // has to be after inspector plugin
         .add_startup_system(setup)
         .add_system(setup_level)
         .run();
@@ -20,43 +26,53 @@ fn setup_level(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     stack_config: Res<helper::BallStackConfig>,
+    mut manifolds: ResMut<ManifoldCollector>, // TODO: remove this with component based
+    mut constraints: ResMut<ConstraintArena>, // TODO: remove this with component based
 ) {
     for _ in ev_reset.iter() {
         info!("Reset");
 
+        manifolds.clear();
+        constraints.clear();
+
         // Setup level
         let mesh = meshes.add(Mesh::from(shape::UVSphere {
-            radius: 1.0,
+            radius: stack_config.ball_radius,
             sectors: stack_config.ball_sectors,
             stacks: stack_config.ball_stacks,
         }));
 
-        for i in 0..stack_config.level_size {
-            for j in 0..stack_config.level_size {
-                for k in 0..stack_config.level_size {
-                    let pos = Vec3::new(
-                        i as f32 * stack_config.offset,
-                        j as f32 * stack_config.offset,
-                        k as f32 * stack_config.offset,
-                    );
-                    commands
-                        .spawn_bundle(PbrBundle {
-                            transform: Transform::from_translation(pos),
-                            mesh: mesh.clone(),
-                            material: stack_config.ball_material.clone(),
-                            ..Default::default()
-                        })
-                        .insert(Body {
-                            collider: Collider::from(Sphere { radius: 1.0 }),
-                            inv_mass: 1.0,
-                            elasticity: 1.0,
-                            friction: 0.5,
-                            ..Default::default()
-                        })
-                        .insert(helper::Reset)
-                        .insert(Name::new("Sphere"));
-                }
+        let b2 = stack_config.base_size * stack_config.base_size;
+        let mut pos = Vec3::new(0.0, 1.0, 0.0);
+        for i in 0..stack_config.count {
+            if i % stack_config.base_size == 0 {
+                pos.x = 0.0;
+                pos.z += stack_config.offset;
+            } else {
+                pos.x += stack_config.offset;
             }
+            if i % b2 == 0 {
+                pos.x = 0.0;
+                pos.z = 0.0;
+                pos.y += stack_config.offset;
+            }
+
+            commands
+                .spawn_bundle(PbrBundle {
+                    transform: Transform::from_translation(pos),
+                    mesh: mesh.clone(),
+                    material: stack_config.ball_material.clone(),
+                    ..Default::default()
+                })
+                .insert(Body {
+                    collider: Collider::from(Sphere { radius: stack_config.ball_radius }),
+                    inv_mass: 1.0,
+                    elasticity: 1.0,
+                    friction: 0.5,
+                    ..Default::default()
+                })
+                .insert(helper::Reset)
+                .insert(Name::new("Ball"));
         }
     }
 }
@@ -87,7 +103,7 @@ fn setup(
                 sectors: 60,
                 stacks: 60,
             })),
-            transform: Transform::from_xyz(0.0, -ground_radius, 0.0),
+            transform: Transform::from_xyz(0.0, -ground_radius - 1.0, 0.0),
             material: materials.add(StandardMaterial {
                 base_color: Color::GREEN,
                 ..Default::default()
