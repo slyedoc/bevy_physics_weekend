@@ -1,18 +1,18 @@
 use bevy::prelude::*;
 
+use crate::gjk::{gjk_closest_points, gjk_does_intersect};
 use crate::prelude::{Body, Contact, ShapeType};
-use crate::gjk::{gjk_does_intersect, gjk_closest_points};
 
 fn intersect_static(
     entity_a: Entity,
-    body_a: &mut Body,
-    transform_a: &mut Transform,
+    body_a: &Body,
+    transform_a: &Transform,
     entity_b: Entity,
-    body_b: &mut Body,
-    transform_b: &mut Transform,
+    body_b: &Body,
+    transform_b: &Transform,
 ) -> (Contact, bool) {
     match (body_a.collider.shape, body_b.collider.shape) {
-        (ShapeType::Sphere { radius: radius_a}, ShapeType::Sphere {radius: radius_b} ) => {
+        (ShapeType::Sphere { radius: radius_a }, ShapeType::Sphere { radius: radius_b }) => {
             let pos_a = transform_a.translation;
             let pos_b = transform_b.translation;
 
@@ -73,7 +73,8 @@ fn intersect_static(
                     true,
                 )
             } else {
-                let (world_point_a, world_point_b) = gjk_closest_points(body_a, transform_a, body_b, transform_b);
+                let (world_point_a, world_point_b) =
+                    gjk_closest_points(body_a, transform_a, body_b, transform_b);
                 (
                     Contact {
                         entity_a,
@@ -95,22 +96,22 @@ fn intersect_static(
 
 pub fn intersect_dynamic(
     entity_a: Entity,
-    body_a: &mut Body,
-    transform_a: &mut Transform,
+    body_a: &Body,
+    transform_a: &Transform,
     entity_b: Entity,
-    body_b: &mut Body,
-    transform_b: &mut Transform,
+    body_b: &Body,
+    transform_b: &Transform,
     dt: f32,
 ) -> Option<Contact> {
     // skip body pairs with infinite mass
-    if body_a.inv_mass == 0.0 && body_b.inv_mass == 0.0 {
+    if body_a.has_infinite_mass() && body_b.has_infinite_mass() {
         return None;
     }
 
     // test for intersections, fire contact event if necessary
     let shapes = (body_a.collider.shape, body_b.collider.shape);
     match shapes {
-        (ShapeType::Sphere { radius: radius_a} , ShapeType::Sphere { radius: radius_b}) => {
+        (ShapeType::Sphere { radius: radius_a }, ShapeType::Sphere { radius: radius_b }) => {
             if let Some((world_point_a, world_point_b, time_of_impact)) = sphere_sphere_dynamic(
                 radius_a,
                 radius_b,
@@ -120,19 +121,13 @@ pub fn intersect_dynamic(
                 body_b.linear_velocity,
                 dt,
             ) {
-                // step bodies forward to get local space collision points
-                body_a.update(transform_a, time_of_impact);
-                body_b.update(transform_b, time_of_impact);
+                // simulate moving forward to get local space collision points
+                let (pos_a, local_point_a) =
+                    body_a.local_collision_point(transform_a, time_of_impact, world_point_a);
+                let (pos_b, local_point_b) =
+                    body_b.local_collision_point(transform_b, time_of_impact, world_point_b);
 
-                // convert world space contacts to local space
-                let local_point_a = body_a.world_to_local(transform_a, world_point_a);
-                let local_point_b = body_b.world_to_local(transform_b, world_point_b);
-
-                let normal = (transform_a.translation - transform_b.translation).normalize();
-
-                // unwind time step
-                body_a.update(transform_a, -time_of_impact);
-                body_b.update(transform_b, -time_of_impact);
+                let normal = (pos_a - pos_b).normalize();
 
                 // calculate the separation distance
                 let ab = transform_a.translation - transform_b.translation;
@@ -153,35 +148,51 @@ pub fn intersect_dynamic(
                 None
             }
         }
+        // TODO: implement support for other shapes
         (_, _) => {
             // use GJK to perform conservative advancement
-            conservative_advance(entity_a, body_a, transform_a,  entity_b, body_b, transform_b, dt)
-
-        },
+            conservative_advance(
+                entity_a,
+                body_a,
+                transform_a,
+                entity_b,
+                body_b,
+                transform_b,
+                dt,
+            )
+        }
     }
 }
 
-
 fn conservative_advance(
     entity_a: Entity,
-    body_a: &mut Body,
-    transform_a: &mut Transform,
+    body_a: &Body,
+    transform_a: &Transform,
     entity_b: Entity,
-    body_b: &mut Body,
-    transform_b: &mut Transform,
+    body_b: &Body,
+    transform_b: &Transform,
     mut dt: f32,
 ) -> Option<Contact> {
     let mut toi = 0.0;
     let mut num_iters = 0;
 
+    // TODO: Yes copies here are bad, but the old way required mutable access,
+    // need to figure better way to simulate update
+    let mut tmp_body_a = body_a.to_owned();
+    let mut tmp_body_b = body_b.to_owned();
+
+    let mut tmp_trans_a = transform_a.to_owned();
+    let mut tmp_trans_b = transform_b.to_owned();
+
     // advance the positions of the bodies until they touch or there's not time left
     while dt > 0.0 {
         // check for intersection
-        let (mut contact, did_intersect) = intersect_static(entity_a, body_a, transform_a, entity_b, body_b, transform_b);
+        let (mut contact, did_intersect) =
+            intersect_static(entity_a, body_a, transform_a, entity_b, body_b, transform_b);
         if did_intersect {
             contact.time_of_impact = toi;
-            body_a.update(transform_a, -toi);
-            body_b.update(transform_b, -toi);
+            tmp_body_a.update(&mut tmp_trans_a, -toi);
+            tmp_body_b.update(&mut tmp_trans_b, -toi);
             return Some(contact);
         }
 
@@ -217,13 +228,9 @@ fn conservative_advance(
 
         dt -= time_to_go;
         toi += time_to_go;
-        body_a.update(transform_a,time_to_go);
-        body_b.update(transform_b,time_to_go);
+        tmp_body_a.update(&mut tmp_trans_a, time_to_go);
+        tmp_body_b.update(&mut tmp_trans_a, time_to_go);
     }
-
-    // unwind the clock
-    body_a.update(transform_a,-toi);
-    body_b.update(transform_b,-toi);
 
     None
 }
@@ -270,7 +277,6 @@ pub fn sphere_sphere_static(
         None
     }
 }
-
 
 fn sphere_sphere_dynamic(
     radius_a: f32,
@@ -333,4 +339,3 @@ fn sphere_sphere_dynamic(
 
     Some((pt_on_a, pt_on_b, toi))
 }
-

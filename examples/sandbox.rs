@@ -15,7 +15,7 @@ fn main() {
         .add_plugin(InspectorPlugin::<PhysicsConfig>::new())
         // our plugin
         .add_plugin(PhysicsPlugin)
-        .add_startup_system(setup)
+        .add_startup_system( setup)
         .add_system(setup_level)
         .run();
 }
@@ -25,20 +25,15 @@ fn setup_level(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut manifolds: ResMut<ManifoldCollector>, // TODO: remove this with component based
     mut constraints: ResMut<ConstraintArena>, // TODO: remove this with component based
-
 ) {
     for _ in ev_reset.iter() {
-
         info!("Reset");
 
-        manifolds.clear();
         constraints.clear();
 
-
         // Spheres
-        for i in 0..5 {
+        for i in 0..1 {
             commands
                 .spawn_bundle(PbrBundle {
                     transform: Transform::from_xyz(i as f32 * 2.2, 2.0, 0.0),
@@ -64,24 +59,24 @@ fn setup_level(
         }
 
         commands
-        .spawn_bundle(PbrBundle {
-            transform: Transform::from_xyz(0.0, 2.0, -5.0),
-            mesh: meshes.add(Mesh::from(shape::Box::new(1.0, 1.0, 1.0))),
-            material: materials.add(StandardMaterial {
-                base_color: Color::rgb(0.5, 0.5, 0.5),
+            .spawn_bundle(PbrBundle {
+                transform: Transform::from_xyz(0.0, 2.0, -5.0),
+                mesh: meshes.add(Mesh::from(shape::Box::new(1.0, 1.0, 1.0))),
+                material: materials.add(StandardMaterial {
+                    base_color: Color::rgb(0.5, 0.5, 0.5),
+                    ..Default::default()
+                }),
                 ..Default::default()
-            }),
-            ..Default::default()
-        })
-        .insert(Body {
-            collider: Collider::from(shape::Box::new(1.0, 1.0, 1.0)),
-            inv_mass: 1.0,
-            elasticity: 1.0,
-            friction: 0.5,
-            ..Default::default()
-        })
-        .insert(helper::Reset)
-        .insert(Name::new("Sphere"));
+            })
+            .insert(Body {
+                collider: Collider::from(shape::Box::new(1.0, 1.0, 1.0)),
+                inv_mass: 1.0,
+                elasticity: 1.0,
+                friction: 0.5,
+                ..Default::default()
+            })
+            .insert(helper::Reset)
+            .insert(Name::new("Sphere"));
     }
 }
 
@@ -102,32 +97,32 @@ fn setup(
     // light
     helper::spawn_light(&mut commands);
 
-  // Ground
-  let ground_radius = 1000.0;
-  commands
-      .spawn_bundle(PbrBundle {
-          mesh: meshes.add(Mesh::from(shape::UVSphere {
-              radius: ground_radius,
-              sectors: 60,
-              stacks: 60,
-          })),
-          transform: Transform::from_xyz(0.0, -ground_radius - 1.0, 0.0),
-          material: materials.add(StandardMaterial {
-              base_color: Color::GREEN,
-              ..Default::default()
-          }),
-          ..Default::default()
-      })
-      .insert(Body {
-          inv_mass: 0.0,
-          collider: Collider::from(Sphere {
-              radius: ground_radius,
-          }),
-          friction: 0.5,
-          elasticity: 0.5,
-          ..Default::default()
-      })
-      .insert(Name::new("Ground"));
+    // Ground
+    let ground_radius = 1000.0;
+    commands
+        .spawn_bundle(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::UVSphere {
+                radius: ground_radius,
+                sectors: 60,
+                stacks: 60,
+            })),
+            transform: Transform::from_xyz(0.0, -ground_radius - 1.0, 0.0),
+            material: materials.add(StandardMaterial {
+                base_color: Color::GREEN,
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+        .insert(Body {
+            inv_mass: 0.0,
+            collider: Collider::from(Sphere {
+                radius: ground_radius,
+            }),
+            friction: 0.5,
+            elasticity: 0.5,
+            ..Default::default()
+        })
+        .insert(Name::new("Ground"));
 
     /*
      * Ground

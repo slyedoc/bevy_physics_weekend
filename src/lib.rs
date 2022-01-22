@@ -7,16 +7,16 @@ mod constraints;
 mod contact;
 mod gjk;
 mod intersect;
-mod manifold;
 mod math;
 mod phase;
 
 use bevy::prelude::*;
 use bevy_inspector_egui::Inspectable;
 
-use manifold::*;
+use constraints::ConstraintPenetration;
 use phase::*;
 use prelude::{ConstraintArena, Contact};
+use bevy_polyline::*;
 
 pub mod prelude {
     pub use crate::{
@@ -24,7 +24,7 @@ pub mod prelude {
         colliders::*,
         constraints::*,
         contact::*,
-        manifold::*, // TODO: remove
+        phase::*,
         PhysicsConfig,
         PhysicsPlugin,
     };
@@ -57,7 +57,7 @@ impl Default for PhysicsConfig {
 #[derive(SystemLabel, Clone, Hash, Debug, Eq, PartialEq)]
 pub enum PhysicsSystem {
     PreUpdate,
-    Gravity,
+    Dynamics,
     Broadphase,
     Narrowphase,
     AddManifold,
@@ -65,54 +65,53 @@ pub enum PhysicsSystem {
     ApplyBallisticImpulses,
 }
 
-pub struct AddManifold(pub Contact);
-
 pub struct PhysicsPlugin;
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<Contact>()
-            .add_event::<AddManifold>()
+
+        app
+            .add_plugin(PolylinePlugin) // TODO: MOve this to debug render plugin
+            .add_event::<Contact>()
             .add_system_set(
                 SystemSet::new()
                     .label(PhysicsSystem::PreUpdate)
                     .with_system(timestep_system)
-                    .with_system(manifold_remove_expired),
+                    .with_system(manifold_remove_expired_system),
             )
             .add_system(
-                gravity_system
-                    .label(PhysicsSystem::Gravity)
+                    dynamics_gravity_system
+                    .label(PhysicsSystem::Dynamics)
                     .after(PhysicsSystem::PreUpdate),
             )
             .add_system(
                 broadphase_system
                     .label(PhysicsSystem::Broadphase)
-                    .after(PhysicsSystem::Gravity),
+                    .after(PhysicsSystem::Dynamics),
             )
             .add_system(
                 narrowphase_system
                     .label(PhysicsSystem::Narrowphase)
                     .after(PhysicsSystem::Broadphase),
             )
-            .add_system(
-                manifold_add_system
-                     .label(PhysicsSystem::AddManifold)
-                     .after(PhysicsSystem::Narrowphase),
-            )
-            .add_system(
-                constraints_system
+            .add_system_set(
+                SystemSet::new()
                     .label(PhysicsSystem::Constraints)
-                    .after(PhysicsSystem::AddManifold),
+                    .after(PhysicsSystem::Narrowphase)
+                    .with_system(constraints::pre_solve_system::<ConstraintPenetration>)
+                    .with_system(constraints::solve_system::<ConstraintPenetration>)
+                    .with_system(constraints::post_solve_system::<ConstraintPenetration>)
+                    .with_system(constraints_system),
+                    
             )
             .add_system(
                 ballistic_impulses_system
-                    .label(PhysicsSystem::ApplyBallisticImpulses)
+                    .label(PhysicsSystem::Constraints)
                     .after(PhysicsSystem::Narrowphase),
             );
 
         // Add resources
         app.init_resource::<PhysicsConfig>();
         app.init_resource::<PhysicsTime>();
-        app.init_resource::<ManifoldCollector>();
         app.init_resource::<ConstraintArena>();
         app.init_resource::<CollisionPairVec>();
         app.init_resource::<ContactVec>();
@@ -128,7 +127,7 @@ pub struct CollisionPairVec(pub Vec<CollisionPair>);
 
 impl Default for CollisionPairVec {
     fn default() -> Self {
-        Self(Vec::<CollisionPair>::with_capacity(1000))
+        Self(Vec::<CollisionPair>::with_capacity(100000))
     }
 }
 

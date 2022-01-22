@@ -6,7 +6,7 @@ use crate::{
     prelude::Body,
 };
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Component, Copy, Clone, Debug, Default)]
 pub struct ConstraintPenetration {
     config: ConstraintConfig,
     jacobian: MatMN<3, 12>,

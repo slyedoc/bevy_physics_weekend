@@ -1,13 +1,12 @@
 use bevy::prelude::*;
 use crate::{PhysicsConfig, prelude::Body, PhysicsTime};
 
-pub fn gravity_system(
+pub fn dynamics_gravity_system(
     //pool: Res<ComputeTaskPool>,
     config: Res<PhysicsConfig>,
     pt: Res<PhysicsTime>,
     mut query: Query<&mut Body>,
 ) {
-
     if pt.time == 0.0 || config.gravity == Vec3::ZERO {
         return;
     }

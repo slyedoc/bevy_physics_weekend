@@ -9,7 +9,7 @@ mod constraint_penetration;
 
 use crate::{
     math::{MatMN, VecN},
-    body::Body,
+    body::Body, PhysicsTime, PhysicsConfig,
 };
 use bevy::prelude::*;
 use constraint_constant_velocity::ConstraintConstantVelocityLimited;
@@ -47,6 +47,39 @@ pub trait Constraint: Send + Sync {
     fn solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>);
     fn post_solve(&mut self) {}
 }
+pub fn pre_solve_system<T : Constraint + Component>(
+    pt: Res<PhysicsTime>,
+    mut query: Query<&mut T>,
+    mut bodies: Query<(Entity, &mut Body, &mut Transform)>,
+) {
+    if pt.time == 0.0 {
+        return;
+    }
+    for mut constraint in query.iter_mut() {
+        constraint.pre_solve(&mut bodies, pt.time);
+    }
+}
+
+pub fn solve_system<T : Constraint + Component>(
+    config: Res<PhysicsConfig>,
+    mut query: Query<&mut T>,
+    mut bodies: Query<(Entity, &mut Body, &mut Transform)>,
+) {
+    for mut constraint in query.iter_mut() {
+        for _ in 0..config.constrain_max_iter {
+            constraint.solve(&mut bodies);
+        }
+    }
+}
+
+pub fn post_solve_system<T : Constraint + Component>(
+    mut query: Query<&mut T>,
+) {
+    for mut constraint in query.iter_mut() {
+        constraint.post_solve();
+    }
+}
+
 
 #[derive(Default)]
 pub struct ConstraintArena {

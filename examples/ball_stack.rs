@@ -26,13 +26,11 @@ fn setup_level(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     stack_config: Res<helper::BallStackConfig>,
-    mut manifolds: ResMut<ManifoldCollector>, // TODO: remove this with component based
     mut constraints: ResMut<ConstraintArena>, // TODO: remove this with component based
 ) {
     for _ in ev_reset.iter() {
         info!("Reset");
 
-        manifolds.clear();
         constraints.clear();
 
         // Setup level

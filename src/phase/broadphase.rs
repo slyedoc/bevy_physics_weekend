@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::primitives::Aabb};
 
 use super::CollisionPair;
 use crate::{body::Body, CollisionPairVec, PhysicsTime};
@@ -10,7 +10,46 @@ pub struct PsuedoBody {
 }
 
 // Broadphase (build potential collision pairs)
+// not currently dynamic, wanted to test using the render Aabb
 pub fn broadphase_system(
+    query: Query<(Entity, &Transform, &Body, &Aabb)>,
+    pt: Res<PhysicsTime>,
+    mut collision_pairs: ResMut<CollisionPairVec>,
+) {
+    collision_pairs.0.clear();
+
+    let mut iter = query.iter_combinations();
+    while let Some([(e1, trans_a, body_a, aabb_a), (e2, trans_b, body_b, aabb_b)]) =
+        iter.fetch_next()
+    {
+        let mut aabb_a = aabb_a.clone();
+        aabb_a.center += trans_a.translation;
+        //aabb_a.half_extents = body_a.linear_velocity * pt.time * 0.5;
+
+        let mut aabb_b = aabb_b.clone();
+        aabb_b.center += trans_b.translation;
+        //aabb_a.half_extents = body_b.linear_velocity * pt.time * 0.5;
+
+        //     const BOUNDS_EPS: f32 = 0.01;
+        //     bounds.expand_by_point(bounds.mins - Vec3::splat(BOUNDS_EPS));
+        //     bounds.expand_by_point(bounds.maxs + Vec3::splat(BOUNDS_EPS));
+
+        if (aabb_a.center.x - aabb_a.half_extents.x <= aabb_b.center.x + aabb_b.half_extents.x
+            && aabb_a.center.x + aabb_a.half_extents.x >= aabb_b.center.x - aabb_b.half_extents.x)
+            && (aabb_a.center.y - aabb_a.half_extents.y <= aabb_b.center.y + aabb_b.half_extents.y
+                && aabb_a.center.y + aabb_a.half_extents.y
+                    >= aabb_b.center.y - aabb_b.half_extents.y)
+            && (aabb_a.center.z - aabb_a.half_extents.z <= aabb_b.center.z + aabb_b.half_extents.z
+                && aabb_a.center.z + aabb_a.half_extents.z
+                    >= aabb_b.center.z - aabb_b.half_extents.z)
+        {
+            collision_pairs.0.push(CollisionPair { a: e1, b: e2 });
+        }
+    }
+}
+
+// Broadphase (build potential collision pairs)
+pub fn broadphase_system_old(
     query: Query<(Entity, &Body, &Transform)>,
     pt: Res<PhysicsTime>,
     mut sorted_bodies: Local<Vec<PsuedoBody>>,

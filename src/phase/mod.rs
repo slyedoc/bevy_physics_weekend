@@ -1,16 +1,18 @@
 
 mod broadphase;
 mod narrowphase;
-mod gravity;
+mod dynamics;
 mod ballistic_impulses;
 mod constraints;
+mod manifold;
 
 use bevy::prelude::Entity;
 pub use broadphase::*;
 pub use narrowphase::*;
 pub use constraints::*;
 pub use ballistic_impulses::*;
-pub use gravity::*;
+pub use dynamics::*;
+pub use manifold::*;
 
 #[derive(Copy, Clone, Debug)]
 pub struct CollisionPair {

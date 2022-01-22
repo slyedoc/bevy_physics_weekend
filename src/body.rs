@@ -2,7 +2,7 @@
 use crate::colliders::*;
 use bevy::prelude::*;
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct Body {
     pub linear_velocity: Vec3,
     pub angular_velocity: Vec3,
@@ -131,5 +131,58 @@ impl Body {
 
         // now get the new body position
         transform.translation = position_com + dq * com_to_position;
+    }
+
+    /// The old way use to move the transform to find local collision point at time of impact,
+    /// then role it back by running it with -time, required mutablity and required running the update logic twice
+    /// This removes that and simulates moving the transform
+    /// Hate coping this much logic
+    /// return translation and local collision point for time of impact
+    pub fn local_collision_point(&self, transform: &Transform, toi: f32, world_point: Vec3) -> (Vec3, Vec3) {
+
+         let mut tmp = transform.clone();
+
+         // Start Update Simulation
+         
+         // apply linear velocity
+         tmp.translation += self.linear_velocity * toi;
+
+         // we have an angular velocity around the centre of mass, this needs to be converted to
+         // relative body translation. This way we can properly update the rotation of the model
+ 
+         let position_com = self.centre_of_mass_world(&tmp);
+         let com_to_position = tmp.translation - position_com;
+ 
+         // total torque is equal to external applied torques + internal torque (precession)
+         // T = T_external + omega x I * omega
+         // T_external = 0 because it was applied in the collision response function
+         // T = Ia = w x I * w
+         // a = I^-1 (w x I * w)
+         let orientation = Mat3::from_quat(tmp.rotation);
+         let inertia_tensor = orientation * self.collider.inertia_tensor * orientation.transpose();
+         let alpha = inertia_tensor.inverse()
+             * (self
+                 .angular_velocity
+                 .cross(inertia_tensor * self.angular_velocity));
+
+         let tmp_angular_velocity = self.angular_velocity + alpha * toi;
+ 
+         // update orientation
+         let d_angle = tmp_angular_velocity * toi;
+         let angle = d_angle.length();
+         let inv_angle = angle.recip();
+         let dq = if inv_angle.is_finite() {
+             Quat::from_axis_angle(d_angle * inv_angle, angle)
+         } else {
+             Quat::IDENTITY
+         };
+         tmp.rotation = (dq * tmp.rotation).normalize();
+ 
+         // now get the new body position
+         tmp.translation = position_com + dq * com_to_position;
+
+         // Simulated update complete
+         // now we can use tmp to find the local collision point
+         (tmp.translation, self.world_to_local(&tmp, world_point))
     }
 }

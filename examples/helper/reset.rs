@@ -11,7 +11,7 @@ impl Plugin for ResetPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<ResetEvent>()
             .add_startup_system(setup)
-            .add_system_to_stage( CoreStage::Update,  reset_level);
+            .add_system_to_stage( CoreStage::PostUpdate,  reset_level);
     }
 }
 
