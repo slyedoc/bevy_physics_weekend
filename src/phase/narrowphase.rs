@@ -19,11 +19,6 @@ pub fn narrowphase_system(
     mut contacts: ResMut<ContactVec>,
     mut manifolds: Query<&mut Manifold>,
 ) {
-    info!("manifolds: {}", manifolds.iter().count());
-    info!("contacts: {}", contacts.0.len());
-    info!("collision_pairs: {}", collision_pairs.0.len());
-
-
     contacts.0.clear();
 
     // test possable contacts collisions
@@ -63,6 +58,9 @@ pub fn narrowphase_system(
             };
 
             if let Some(contact) = contact_result {
+
+                info!("Contact found between {:?} and {:?}", pair.a, pair.b);
+                
                 if contact.time_of_impact == 0.0 {
                     // static contact (already touching)
 
@@ -82,6 +80,7 @@ pub fn narrowphase_system(
                     if let Some(mut manifold) = found {
                         //existing manifold, add the contact to it
                         add_manifold_contact(
+                            &mut commands,
                             &mut manifold,
                             body_a,
                             transform_a,
@@ -94,6 +93,7 @@ pub fn narrowphase_system(
                         // we don't have an existing manifold, create a new one
                         let mut new_manifold = Manifold::new(contact.entity_a, contact.entity_b);
                         add_manifold_contact(
+                            &mut commands,
                             &mut new_manifold,
                             body_a,
                             transform_a,
@@ -128,6 +128,7 @@ pub fn narrowphase_system(
 }
 
 fn add_manifold_contact(
+    commands: &mut Commands,
     manifold: &mut Manifold,
     body_a: &Body,
     transform_a: &Transform,
@@ -200,25 +201,26 @@ fn add_manifold_contact(
     normal = normal.normalize();
     let constraint = ConstraintPenetration::new(
         ConstraintConfig {
-            handle_a: Some(contact.entity_a),
-            handle_b: Some(contact.entity_b),
+            handle_a: contact.entity_a,
+            handle_b: contact.entity_b,
             anchor_a: contact.local_point_a,
             anchor_b: contact.local_point_b,
             ..ConstraintConfig::default()
         },
         normal,
     );
+    let constraint_entity = commands.spawn().insert(constraint).id();
 
     // add or replace contact
     if new_slot == manifold.contact_contraints.len() {
         manifold.contact_contraints.push(ContactConstraint {
             contact,
-            constraint,
+            constraint_entity,
         });
     } else {
         manifold.contact_contraints[new_slot] =  ContactConstraint {
             contact,
-            constraint,
+            constraint_entity,
         };
     }
 }

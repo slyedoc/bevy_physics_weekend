@@ -1,7 +1,7 @@
 use super::{quat_left, quat_right, Constraint, ConstraintConfig};
 use crate::{
-    math::{lcp_gauss_seidel, MatMN, MatN, VecN},
     body::Body,
+    math::{lcp_gauss_seidel, MatMN, MatN, VecN},
 };
 use bevy::prelude::*;
 
@@ -28,14 +28,10 @@ impl ConstraintMotor {
 }
 
 impl Constraint for ConstraintMotor {
-    fn pre_solve(
-        &mut self,
-        bodies: &mut Query<(Entity, &mut Body, &mut Transform)>,
-        dt_sec: f32,
-    ) {
+    fn pre_solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>, dt_sec: f32) {
         unsafe {
-            let (_, body_a, trans_a) = bodies.get_unchecked(self.config.handle_a.unwrap()).unwrap();
-            let (_, body_b, trans_b) = bodies.get_unchecked(self.config.handle_b.unwrap()).unwrap();
+            let (_, body_a, trans_a) = bodies.get_unchecked(self.config.handle_a).unwrap();
+            let (_, body_b, trans_b) = bodies.get_unchecked(self.config.handle_b).unwrap();
 
             // get the world space position of the hinge from body_a's orientation
             let world_anchor_a = body_a.local_to_world(&trans_a, self.config.anchor_a);
@@ -184,7 +180,7 @@ impl Constraint for ConstraintMotor {
     }
 
     fn solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>) {
-        let (_, _body_a, trans_a) = bodies.get_mut(self.config.handle_a.unwrap()).unwrap();
+        let (_, _body_a, trans_a) = bodies.get_mut(self.config.handle_a).unwrap();
 
         let motor_axis = trans_a.rotation * self.motor_axis;
 

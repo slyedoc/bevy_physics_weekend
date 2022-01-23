@@ -25,14 +25,10 @@ impl ConstraintDistance {
 }
 
 impl Constraint for ConstraintDistance {
-    fn pre_solve(
-        &mut self,
-        bodies: &mut Query<(Entity, &mut Body, &mut Transform)>,
-        dt_sec: f32,
-    ) {
+    fn pre_solve(&mut self, bodies: &mut Query<(Entity, &mut Body, &mut Transform)>, dt_sec: f32) {
         unsafe {
-            let (_, body_a, trans_a) = bodies.get_unchecked(self.config.handle_a.unwrap()).unwrap();
-            let (_, body_b, trans_b) = bodies.get_unchecked(self.config.handle_b.unwrap()).unwrap();
+            let (_, body_a, trans_a) = bodies.get_unchecked(self.config.handle_a).unwrap();
+            let (_, body_b, trans_b) = bodies.get_unchecked(self.config.handle_b).unwrap();
 
             // get the world space position of the hinge from body_a's orientation
             let world_anchor_a = body_a.local_to_world(&trans_a, self.config.anchor_a);

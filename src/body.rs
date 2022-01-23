@@ -140,16 +140,16 @@ impl Body {
     /// return translation and local collision point for time of impact
     pub fn local_collision_point(&self, transform: &Transform, toi: f32, world_point: Vec3) -> (Vec3, Vec3) {
 
-         let mut tmp = transform.clone();
+         let mut tmp = transform.to_owned();
 
          // Start Update Simulation
-         
+
          // apply linear velocity
          tmp.translation += self.linear_velocity * toi;
 
          // we have an angular velocity around the centre of mass, this needs to be converted to
          // relative body translation. This way we can properly update the rotation of the model
- 
+
          let position_com = self.centre_of_mass_world(&tmp);
          let com_to_position = tmp.translation - position_com;
  

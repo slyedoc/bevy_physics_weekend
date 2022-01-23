@@ -3,13 +3,11 @@ mod broadphase;
 mod narrowphase;
 mod dynamics;
 mod ballistic_impulses;
-mod constraints;
 mod manifold;
 
 use bevy::prelude::Entity;
 pub use broadphase::*;
 pub use narrowphase::*;
-pub use constraints::*;
 pub use ballistic_impulses::*;
 pub use dynamics::*;
 pub use manifold::*;

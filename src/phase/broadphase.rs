@@ -10,16 +10,17 @@ pub struct PsuedoBody {
 }
 
 // Broadphase (build potential collision pairs)
-// not currently dynamic, wanted to test using the render Aabb
-pub fn broadphase_system(
-    query: Query<(Entity, &Transform, &Body, &Aabb)>,
-    pt: Res<PhysicsTime>,
+// wanted to test using the render Aabb
+// TODO: make dynamic, and schedule around aabb updates
+pub fn broadphase_system_aabb(
+    query: Query<(Entity, &Transform, &Aabb)>,
+    //pt: Res<PhysicsTime>,
     mut collision_pairs: ResMut<CollisionPairVec>,
 ) {
     collision_pairs.0.clear();
 
     let mut iter = query.iter_combinations();
-    while let Some([(e1, trans_a, body_a, aabb_a), (e2, trans_b, body_b, aabb_b)]) =
+    while let Some([(e1,  trans_a, aabb_a), (e2,   trans_b, aabb_b)]) =
         iter.fetch_next()
     {
         let mut aabb_a = aabb_a.clone();
@@ -49,6 +50,7 @@ pub fn broadphase_system(
 }
 
 // Broadphase (build potential collision pairs)
+// sweep and prune 1d
 pub fn broadphase_system_old(
     query: Query<(Entity, &Body, &Transform)>,
     pt: Res<PhysicsTime>,

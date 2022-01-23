@@ -23,7 +23,8 @@ bevy_polyline = "0.1"
 [dev-dependencies]
 bevy = { version = "0.6.0", default-features = true }
 bevy-inspector-egui = { version = "0.7.1" }
-bevy_rapier3d = { path = "../bevy_rapier/bevy_rapier3d" }
+bevy_rapier3d = { git = "https://github.com/dimforge/bevy_rapier", branch = "master" }
+
 
 #[patch.crates-io]
 #bevy = { git = "https://github.com/bevyengine/bevy", branch = "main" }

@@ -26,15 +26,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug example 'simple'",
+            "name": "Debug example 'ball_stack_rapier'",
             "cargo": {
                 "args": [
                     "build",
-                    "--example=simple",
+                    "--example=ball_stack_rapier",
                     "--package=bevy_physics_weekend"
                 ],
                 "filter": {
-                    "name": "simple",
+                    "name": "ball_stack_rapier",
                     "kind": "example"
                 }
             },
@@ -44,16 +44,90 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in example 'simple'",
+            "name": "Debug unit tests in example 'ball_stack_rapier'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--example=simple",
+                    "--example=ball_stack_rapier",
                     "--package=bevy_physics_weekend"
                 ],
                 "filter": {
-                    "name": "simple",
+                    "name": "ball_stack_rapier",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'ball_stack'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=ball_stack",
+                    "--package=bevy_physics_weekend"
+                ],
+                "filter": {
+                    "name": "ball_stack",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'ball_stack'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=ball_stack",
+                    "--package=bevy_physics_weekend"
+                ],
+                "filter": {
+                    "name": "ball_stack",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'sandbox'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=sandbox",
+                    "--package=bevy_physics_weekend"
+                ],
+                "filter": {
+                    "name": "sandbox",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'sandbox'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=sandbox",
+                    "--package=bevy_physics_weekend"
+                ],
+                "filter": {
+                    "name": "sandbox",
                     "kind": "example"
                 }
             },

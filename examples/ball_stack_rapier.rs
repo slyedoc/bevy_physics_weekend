@@ -69,10 +69,10 @@ fn setup_level(
                 .insert_bundle(RigidBodyBundle {
                     position: pos.into(),
                     // TODO: Remove this, a small impulse so its not a stable stack
-                    // velocity: RigidBodyVelocity {
-                    //     linvel: Vec3::new(0.1, 0.0, 0.0).into(), // a little velocity to start a fall
-                    //     angvel: Vec3::new(0.1, 0.0, 0.0).into(),
-                    // }
+                    velocity: RigidBodyVelocity {
+                        linvel: Vec3::new(0.1, 0.0, 0.0).into(), // a little velocity to start a fall
+                        angvel: Vec3::new(0.1, 0.0, 0.0).into(),
+                    }.into(),
                     ..Default::default()
                 })
                 .insert_bundle(ColliderBundle {

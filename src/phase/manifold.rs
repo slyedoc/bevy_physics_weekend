@@ -1,73 +1,7 @@
-use crate::{
-    constraints::{ConstraintPenetration},
-    contact::Contact,
-    prelude::Body,
-};
+use crate::{constraints::ConstraintPenetration, contact::Contact, prelude::Body};
 use bevy::prelude::*;
 
 const MAX_CONTACTS: usize = 4;
-
-pub fn manifold_remove_expired_system(
-    mut commands: Commands,
-    bodies: Query<(&Body, &Transform)>,
-    mut query: Query<(Entity, &mut Manifold)>,
-    mut remove_list: Local<Vec<usize>>,
-) {
-    for (e, mut manifold) in query.iter_mut() {
-        remove_list.clear();
-
-        // find contacts that have drifted too far
-        for (i , cc) in manifold.contact_contraints.iter().enumerate() {
-            unsafe {
-                if let Ok((body_a, trans_a)) = bodies.get_unchecked(cc.contact.entity_a) {
-                    if let Ok((body_b, trans_b)) = bodies.get_unchecked(cc.contact.entity_b) {
-                        // get the tangential distance of the point on a and the point on b
-                        let a = body_a.local_to_world(trans_a, cc.contact.local_point_a);
-                        let b = body_b.local_to_world(trans_b, cc.contact.local_point_b);
-
-                        let mut normal = cc.constraint.normal();
-                        normal = trans_a.rotation * normal;
-
-                        // calculate the tangential separation and penetration depth
-                        let ab = b - a;
-                        let penetration_depth = normal.dot(ab);
-                        let ab_normal = normal * penetration_depth;
-                        let ab_tangent = ab - ab_normal;
-
-                        // if the tangential displacement is less than a specific threshold, it's okay to keep
-                        // it.
-                        const DISTANCE_THRESHOLD: f32 = 0.02;
-                        if ab_tangent.length_squared() < DISTANCE_THRESHOLD * DISTANCE_THRESHOLD
-                            && penetration_depth <= 0.0
-                        {
-                            continue;
-                        }
-
-                        // this contact has moved beyond its threshold and should be removed
-                        remove_list.push(i);
-                    } else {
-                        //warn!("Missing Entity A - Removing Manifold");
-                        commands.entity(e).despawn();
-                        break;
-                    }
-                } else {
-                    //warn!("Missing Entity B - Removing Manifold");
-                    commands.entity(e).despawn();
-                    break;
-                }
-            }
-        }
-
-        // TODO: We are only remove them later so we dont fight borrow checker on mut access
-        for i in remove_list.iter().rev() {
-            manifold.contact_contraints.remove(*i);
-        }
-        if manifold.contact_contraints.is_empty() {
-            commands.entity(e).despawn();
-        }
-       
-    }
-}
 
 #[derive(Component)]
 pub struct Manifold {
@@ -78,7 +12,7 @@ pub struct Manifold {
 
 pub struct ContactConstraint {
     pub contact: Contact,
-    pub constraint: ConstraintPenetration
+    pub constraint_entity: Entity,
 }
 
 impl Manifold {
@@ -88,5 +22,74 @@ impl Manifold {
             handle_a,
             handle_b,
         }
+    }
+}
+
+pub fn manifold_remove_expired_system(
+    mut commands: Commands,
+    bodies: Query<(&Body, &Transform)>,
+    mut manifolds: Query<(Entity, &mut Manifold)>,
+    constraints: Query<&ConstraintPenetration>,
+) {
+    for (e, mut manifold) in manifolds.iter_mut() {
+        unsafe {
+            let a = bodies.get_unchecked(manifold.handle_a);
+            let b = bodies.get_unchecked(manifold.handle_b);
+
+            if a.is_err() || b.is_err() {
+                warn!(
+                    "Manifold invalid entity handles, handle_a: {:?}, handle_b: {:?}",
+                    manifold.handle_a, manifold.handle_b
+                );
+                for cc in &manifold.contact_contraints {
+                    commands.entity(cc.constraint_entity).despawn();
+                }
+                commands.entity(e).despawn();
+                continue;
+            }
+
+            let (body_a, trans_a) = a.unwrap();
+            let (body_b, trans_b) = b.unwrap();
+
+            if manifold.contact_contraints.len() >= MAX_CONTACTS {
+
+                // find contacts that have drifted too far
+                manifold.contact_contraints.retain(|cc| {
+                    // get the tangential distance of the point on a and the point on b
+                    let pos_a = body_a.local_to_world(trans_a, cc.contact.local_point_a);
+                    let pos_b = body_b.local_to_world(trans_b, cc.contact.local_point_b);
+
+                    let contraint = constraints.get(cc.constraint_entity).unwrap();
+                    let normal = trans_a.rotation * contraint.normal();
+
+                    // calculate the tangential separation and penetration depth
+                    let ab = pos_b - pos_a;
+                    info!("distance: {}", ab);
+                    let penetration_depth = normal.dot(ab);
+                    let ab_normal = normal * penetration_depth;
+                    let ab_tangent = ab - ab_normal;
+
+                    // if the tangential displacement is less than a specific threshold, it's okay to keep
+                    // it.
+                    const DISTANCE_THRESHOLD: f32 = 0.02;
+                    if ab_tangent.length_squared() < DISTANCE_THRESHOLD * DISTANCE_THRESHOLD
+                        && penetration_depth <= 0.0
+                    {
+                        return true;
+                    }
+
+                    // this contact has moved beyond its threshold and should be removed
+                    warn!("Remove Constraint: {:?}", cc.constraint_entity);
+                    commands.entity(cc.constraint_entity).despawn();
+                    false
+                });
+            }
+        }
+
+        // Clean up self if empty
+        // if manifold.contact_contraints.is_empty() {
+        //     warn!("Manifold Empty: {:?}", e);
+        //     commands.entity(e).despawn();
+        // }
     }
 }
