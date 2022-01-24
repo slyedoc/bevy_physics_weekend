@@ -5,6 +5,8 @@ pub mod reset;
 pub mod ball_stack;
 
 use bevy::{prelude::*, app::PluginGroupBuilder};
+use bevy_inspector_egui::InspectorPlugin;
+use bevy_physics_weekend::prelude::PhysicsReport;
 pub use camera_controller::*;
 pub use editor::*;
 pub use fps::*;
@@ -19,6 +21,7 @@ impl PluginGroup for HelperPlugins {
         group.add(CameraControllerPlugin);
         group.add(ResetPlugin);
         group.add(FPSPlugin);
+        group.add(InspectorPlugin::<PhysicsReport>::new());
     }
 }
 

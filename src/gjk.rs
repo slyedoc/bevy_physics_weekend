@@ -2,7 +2,7 @@
 use bevy::prelude::*;
 use crate::body::Body;
 use crate::math::glam_ext::Mat4Ext;
-use crate::prelude::{Tri, Edge};
+use crate::colliders::{Tri, Edge};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 struct Point {

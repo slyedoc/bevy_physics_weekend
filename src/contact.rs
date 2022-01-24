@@ -13,18 +13,35 @@ pub struct Contact {
     pub time_of_impact: f32,
 }
 
-impl Default for Contact {
-    fn default() -> Self {
-        Self {
-            entity_a: Entity::from_raw(0),
-            entity_b: Entity::from_raw(0),
-            world_point_a: Default::default(),
-            world_point_b: Default::default(),
-            local_point_a: Default::default(),
-            local_point_b: Default::default(),
-            normal: Default::default(),
-            separation_dist: Default::default(),
-            time_of_impact: Default::default(),
+#[derive(Copy, Clone, Debug)]
+pub struct ContactMaybe {
+    pub a: Entity,
+    pub b: Entity,
+}
+
+impl PartialEq for ContactMaybe {
+    fn eq(&self, other: &Self) -> bool {
+        (self.a == other.a && self.b == other.b) || (self.a == other.b && self.b == other.a)
+    }
+}
+
+impl Eq for ContactMaybe {}
+
+#[derive(Copy, Clone, Debug)]
+pub struct PsuedoBody {
+    pub entity: Entity,
+    pub value: f32,
+    pub is_min: bool,
+}
+
+impl PsuedoBody {
+    pub fn compare_sat(a: &PsuedoBody, b: &PsuedoBody) -> std::cmp::Ordering {
+        if a.value < b.value {
+            std::cmp::Ordering::Less
+        } else if a.value > b.value {
+            std::cmp::Ordering::Greater
+        } else {
+            std::cmp::Ordering::Equal
         }
     }
 }

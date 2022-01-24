@@ -3,33 +3,12 @@ use crate::{body::Body, contact::Contact};
 
 use bevy::prelude::*;
 
-pub fn ballistic_impulses_system(
+pub fn resolve_contact_system(
     pt: Res<PhysicsTime>,
     mut query: Query<(Entity, &mut Body, &mut Transform)>,
     mut contacts: EventReader<Contact>,
-    //pool: Res<ComputeTaskPool>,
 ) {
-    //let t0 = Instant::now();
-    // Apply Ballistic impulses
-
-    let mut accumulated_time = 0.0;
-
-    for contact in contacts.iter() {
-        let contact_time = contact.time_of_impact - accumulated_time;
-
-        //position update
-        //#[cfg(feature = "a")]
-        for (_, mut body, mut transform) in query.iter_mut() {
-            body.update(&mut transform, contact_time)
-        }
-
-        // #[cfg(feature = "b")]
-        // query.par_for_each_mut(&pool, 32, |(_, mut body, mut transform)| {
-        //     body.update(&mut transform, contact_time)
-        // });
-        // SAFETY: There is no way to safey access the query twice at the same time I am aware of
-        // Should be safe since entity a and b can't be the same
-        // see https://github.com/bevyengine/bevy/issues/2042
+      for contact in contacts.iter() {
         unsafe {
             let (_, mut body_a, mut transform_a) = query.get_unchecked(contact.entity_a).unwrap();
             let (_, mut body_b, mut transform_b) = query.get_unchecked(contact.entity_b).unwrap();
@@ -41,32 +20,47 @@ pub fn ballistic_impulses_system(
                 &mut transform_b,
             );
         }
-        accumulated_time += contact_time;
     }
 
-    //let t1 = Instant::now();
-    //update positions for the rest of this frame's time
-    let time_remaining = pt.time - accumulated_time;
-    if time_remaining > 0.0 {
-
-        //#[cfg(feature = "a")]
-        for (_, mut body, mut transform) in query.iter_mut() {
-            body.update(&mut transform, time_remaining)
-        }
-        // #[cfg(feature = "b")]
-        // query.par_for_each_mut(&pool, 16, |(_, mut body, mut transform)| {
-        //     body.update(&mut transform, time_remaining)
-        // });
+    //position update
+    for (_, mut body, mut transform) in query.iter_mut() {
+        body.update(&mut transform, pt.time)
     }
 
-    //let t2 = Instant::now();
-    //let total = (t2 - t0).as_secs_f32();
-    // info!(
-    //     "ballistic_impulses_system: main loop {:.1}%, rest {:.1}%",
-    //     (t1 - t0).as_secs_f32() / total * 100.0,
-    //     (t2 - t1).as_secs_f32() / total * 100.0
-    // );
+
+    // // Apply Ballistic impulses
+    // let mut accumulated_time = 0.0;
+    // for contact in contacts.iter() {
+    //     let contact_time = contact.time_of_impact - accumulated_time;
+
+    //     //position update
+    //     for (_, mut body, mut transform) in query.iter_mut() {
+    //         body.update(&mut transform, contact_time)
+    //     }
+
+    //     unsafe {
+    //         let (_, mut body_a, mut transform_a) = query.get_unchecked(contact.entity_a).unwrap();
+    //         let (_, mut body_b, mut transform_b) = query.get_unchecked(contact.entity_b).unwrap();
+    //         resolve_contact(
+    //             contact,
+    //             &mut body_a,
+    //             &mut transform_a,
+    //             &mut body_b,
+    //             &mut transform_b,
+    //         );
+    //     }
+    //     accumulated_time += contact_time;
+    // }
+
+    // //update positions for the rest of this frame's time
+    // let time_remaining = pt.time - accumulated_time;
+    // if time_remaining > 0.0 {
+    //     for (_, mut body, mut transform) in query.iter_mut() {
+    //         body.update(&mut transform, time_remaining)
+    //     }
+    // }
 }
+
 
 fn resolve_contact(
     contact: &Contact,
@@ -101,7 +95,9 @@ fn resolve_contact(
     body_a.apply_impulse(contact.world_point_a, impluse_vec_j, transform_a);
     body_b.apply_impulse(contact.world_point_b, -impluse_vec_j, transform_b);
 
+    //
     // Calculate the friction impulse
+    //
     let friction = body_a.friction * body_b.friction;
 
     // Find the normal direction of the velocity with respoect to the normal of the collison
@@ -127,7 +123,9 @@ fn resolve_contact(
         body_b.apply_impulse(contact.world_point_b, impluse_friction, transform_b);
     }
 
+    //
     // lets move the bodies part if intersecting
+    //
     if contact.time_of_impact == 0.0 {
         // Let's also move our colliding objects to just outside of each other
         let a_move_weight = body_a.inv_mass / total_inv_mass;

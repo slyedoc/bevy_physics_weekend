@@ -2,12 +2,12 @@ use bevy::prelude::*;
 
 use crate::{
     body::Body,
-    intersect::intersect_dynamic,
-    prelude::{ConstraintConfig, ConstraintPenetration, Contact},
-    CollisionPairVec, ContactVec, PhysicsTime,
+    manifold::{Manifold, ManifoldConstraint, },
+    intersect::{intersect_dynamic, sphere_sphere_static},
+    prelude::{ConstraintConfig, ConstraintPenetration, Contact, ContactMaybe, ShapeType},
+    ContactVec, PhysicsTime,
 };
 
-use super::{Manifold, ContactConstraint};
 const MAX_CONTACTS: usize = 4;
 
 // Narrowphase (perform actual collision detection)
@@ -15,14 +15,14 @@ pub fn narrowphase_system(
     mut commands: Commands,
     pt: Res<PhysicsTime>,
     bodies: Query<(&Body, &Transform)>,
-    collision_pairs: Res<CollisionPairVec>,
     mut contacts: ResMut<ContactVec>,
     mut manifolds: Query<&mut Manifold>,
+    mut collision_pairs: EventReader<ContactMaybe>,
 ) {
     contacts.0.clear();
 
     // test possable contacts collisions
-    for pair in collision_pairs.0.iter() {
+    for pair in collision_pairs.iter() {
         // SAFETY: There is no way for a and b to the same entity
         // see https://github.com/bevyengine/bevy/issues/2042
         unsafe {
@@ -60,7 +60,6 @@ pub fn narrowphase_system(
             if let Some(contact) = contact_result {
 
                 info!("Contact found between {:?} and {:?}", pair.a, pair.b);
-                
                 if contact.time_of_impact == 0.0 {
                     // static contact (already touching)
 
@@ -213,14 +212,89 @@ fn add_manifold_contact(
 
     // add or replace contact
     if new_slot == manifold.contact_contraints.len() {
-        manifold.contact_contraints.push(ContactConstraint {
+        manifold.contact_contraints.push(ManifoldConstraint {
             contact,
             constraint_entity,
         });
     } else {
-        manifold.contact_contraints[new_slot] =  ContactConstraint {
+        manifold.contact_contraints[new_slot] =  ManifoldConstraint {
             contact,
             constraint_entity,
         };
+    }
+}
+
+
+pub fn narrowphase_system_static(
+    mut collison_pairs: EventReader<ContactMaybe>,
+    mut contacts: EventWriter<Contact>,
+    bodies: Query<(&Body, &Transform)>,
+) {
+
+    for pair in collison_pairs.iter() {
+
+        // SAFETY: There is no way for a and b to the same entity
+        // see https://github.com/bevyengine/bevy/issues/2042
+        unsafe {
+            let (body_a, transform_a) = bodies.get_unchecked(pair.a).unwrap();
+            let (body_b, transform_b) = bodies.get_unchecked(pair.b).unwrap();
+
+            if body_a.has_infinite_mass() && body_b.has_infinite_mass() {
+                continue;
+            }
+
+            if let Some(contact) = intersect_static(pair.a, body_a, transform_a, pair.b, body_b, transform_b) {
+                //info!("Collision between {:?} and {:?}", pair.a, pair.b);
+                contacts.send(contact);
+            }
+        }
+    }
+
+}
+
+
+fn intersect_static(
+    a: Entity,
+    body_a: &Body,
+    transform_a: &Transform,
+    b: Entity,
+    body_b: &Body,
+    transform_b: &Transform,
+) -> Option<Contact> {
+    match (body_a.collider.shape, body_b.collider.shape) {
+        (ShapeType::Sphere { radius: radius_a }, ShapeType::Sphere { radius: radius_b }) => {
+            if let Some((local_point_a, local_point_b)) = sphere_sphere_static(
+                radius_a,
+                radius_b,
+                transform_a.translation,
+                transform_b.translation,
+            ) {
+                let normal = (transform_a.translation - transform_b.translation).normalize();
+
+                // calculate the separation distance
+                let ab = transform_a.translation - transform_b.translation;
+                let separation_dist = ab.length() - (radius_a + radius_b);
+                return Some(Contact {
+                    entity_a: a,
+                    entity_b: b,
+                    world_point_a: local_point_a,
+                    world_point_b: local_point_b,
+                    local_point_a,
+                    local_point_b,
+                    normal,
+                    separation_dist,
+                    time_of_impact: 0.0,
+                })
+            };
+            None
+        }
+        // (ShapeType::Sphere { radius }, ShapeType::Box) => todo!(),
+        // (ShapeType::Sphere { radius }, ShapeType::Convex) => todo!(),
+        // (ShapeType::Box, ShapeType::Sphere { radius }) => todo!(),
+        // (ShapeType::Box, ShapeType::Box) => todo!(),
+        // (ShapeType::Box, ShapeType::Convex) => todo!(),
+        // (ShapeType::Convex, ShapeType::Sphere { radius }) => todo!(),
+        // (ShapeType::Convex, ShapeType::Box) => todo!(),
+        (_, _) => todo!(),
     }
 }

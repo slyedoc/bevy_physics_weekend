@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{PhysicsConfig, prelude::Body, PhysicsTime};
+use crate::{PhysicsConfig, body::Body, PhysicsTime};
 
 pub fn dynamics_gravity_system(
     //pool: Res<ComputeTaskPool>,
@@ -7,10 +7,6 @@ pub fn dynamics_gravity_system(
     pt: Res<PhysicsTime>,
     mut query: Query<&mut Body>,
 ) {
-    if pt.time == 0.0 || config.gravity == Vec3::ZERO {
-        return;
-    }
-
     for mut body in query.iter_mut() {
         if body.inv_mass != 0.0 {
             // gravity needs to be an impulse

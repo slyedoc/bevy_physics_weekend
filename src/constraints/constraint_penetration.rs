@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use super::ConstraintConfig;
 use crate::{
     math::{lcp_gauss_seidel, MatMN, MatN, VecN},
-    prelude::Body,
+    body::Body,
     PhysicsTime,
 };
 

@@ -13,6 +13,9 @@ impl Plugin for EditorPlugin {
         .add_system(toggle_editor)
         .add_system(toggle_physics)
         .add_startup_system(setup);
+
+        // TODO: Remove, only added so rapier tests dont error
+        app.init_resource::<PhysicsConfig>();
     }
 }
 

@@ -7,10 +7,10 @@ const MAX_CONTACTS: usize = 4;
 pub struct Manifold {
     pub handle_a: Entity,
     pub handle_b: Entity,
-    pub contact_contraints: Vec<ContactConstraint>,
+    pub contact_contraints: Vec<ManifoldConstraint>,
 }
 
-pub struct ContactConstraint {
+pub struct ManifoldConstraint {
     pub contact: Contact,
     pub constraint_entity: Entity,
 }
@@ -64,7 +64,6 @@ pub fn manifold_remove_expired_system(
 
                     // calculate the tangential separation and penetration depth
                     let ab = pos_b - pos_a;
-                    info!("distance: {}", ab);
                     let penetration_depth = normal.dot(ab);
                     let ab_normal = normal * penetration_depth;
                     let ab_tangent = ab - ab_normal;
@@ -85,7 +84,7 @@ pub fn manifold_remove_expired_system(
                 });
             }
         }
-
+        
         // Clean up self if empty
         // if manifold.contact_contraints.is_empty() {
         //     warn!("Manifold Empty: {:?}", e);

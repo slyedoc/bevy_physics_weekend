@@ -6,7 +6,8 @@ use bevy_inspector_egui::Inspectable;
 pub struct BallStackConfig {
     pub count: usize,
     pub base_size: usize,
-    pub offset: f32,
+    pub grid_offset: f32,
+    pub start_height: f32,
     pub ball_radius: f32,
     pub ball_sectors: usize,
     pub ball_stacks: usize,
@@ -26,9 +27,9 @@ impl FromWorld for BallStackConfig {
         let asset_server = world.get_resource_mut::<AssetServer>().unwrap();
 
         Self {
-            count: 100,
+            count: 2000,
             base_size: 10,
-            offset: 3.0,
+            grid_offset: 3.0,
             ball_radius: 1.0,
             ball_sectors: 8,
             ball_stacks: 8,
@@ -37,6 +38,7 @@ impl FromWorld for BallStackConfig {
                 base_color_texture: Some(asset_server.load("checker_red.png")),
                 ..Default::default()
             }),
+            start_height: 5.0,
         }
     }
 }

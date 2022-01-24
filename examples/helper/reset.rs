@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_physics_weekend::PhysicsSystem;
 
 pub struct ResetPlugin;
 
@@ -11,7 +12,7 @@ impl Plugin for ResetPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<ResetEvent>()
             .add_startup_system(setup)
-            .add_system_to_stage( CoreStage::PostUpdate,  reset_level);
+            .add_system( reset_level.after(PhysicsSystem::First));
     }
 }
 

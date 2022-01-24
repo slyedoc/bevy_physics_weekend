@@ -41,23 +41,19 @@ fn setup_level(
         }));
 
         let b2 = stack_config.base_size * stack_config.base_size;
-        let mut pos = Vec3::new(
-             0.0,
-             1.0,
-             0.0,
-        );
+        let mut pos = Vec3::new(0.0, stack_config.start_height, 0.0);
         for i in 0..stack_config.count {
             if i % stack_config.base_size == 0 {
                 pos.x = 0.0;
-                pos.z += stack_config.offset;
+                pos.z += stack_config.grid_offset;
             } else {
-                pos.x += stack_config.offset;
+                pos.x += stack_config.grid_offset;
             }
             if i % b2 == 0 {
                 pos.x = 0.0;
                 pos.z = 0.0;
-                pos.y += stack_config.offset;
-             }
+                pos.y += stack_config.grid_offset;
+            }
 
             commands
                 .spawn_bundle(PbrBundle {
@@ -72,7 +68,8 @@ fn setup_level(
                     velocity: RigidBodyVelocity {
                         linvel: Vec3::new(0.1, 0.0, 0.0).into(), // a little velocity to start a fall
                         angvel: Vec3::new(0.1, 0.0, 0.0).into(),
-                    }.into(),
+                    }
+                    .into(),
                     ..Default::default()
                 })
                 .insert_bundle(ColliderBundle {

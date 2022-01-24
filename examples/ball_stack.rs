@@ -38,18 +38,18 @@ fn setup_level(
         }));
 
         let b2 = stack_config.base_size * stack_config.base_size;
-        let mut pos = Vec3::new(0.0, 1.0, 0.0);
+        let mut pos = Vec3::new(0.0, stack_config.start_height, 0.0);
         for i in 0..stack_config.count {
             if i % stack_config.base_size == 0 {
                 pos.x = 0.0;
-                pos.z += stack_config.offset;
+                pos.z += stack_config.grid_offset;
             } else {
-                pos.x += stack_config.offset;
+                pos.x += stack_config.grid_offset;
             }
             if i % b2 == 0 {
                 pos.x = 0.0;
                 pos.z = 0.0;
-                pos.y += stack_config.offset;
+                pos.y += stack_config.grid_offset;
             }
 
             commands
@@ -63,7 +63,7 @@ fn setup_level(
                     collider: Collider::from(Sphere { radius: stack_config.ball_radius }),
                     inv_mass: 1.0,
                     elasticity: 1.0,
-                    friction: 0.5,
+                    friction: 0.1,
                     ..Default::default()
                 })
                 .insert(helper::Reset)
@@ -111,7 +111,7 @@ fn setup(
                 radius: ground_radius,
             }),
             friction: 0.5,
-            elasticity: 0.5,
+            elasticity: 0.9,
             ..Default::default()
         })
         .insert(Name::new("Ground"));
