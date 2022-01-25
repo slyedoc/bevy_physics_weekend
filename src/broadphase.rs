@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, utils::Instant};
 
 use crate::{
     body::Body,
@@ -145,13 +145,15 @@ pub fn broadphase_system_array(
     query: Query<(Entity, &BroadphaseAabb)>,
 
 ) {
-
-    // Yes, we are copying the array out here, only way to sort it
+    // TODO: Yes, we are copying the array out here, only way to sort it
+    // Ideally we would keep the array around, it should useally already near sorted
+    // but this is still far faster than the naive broadphase
+    //let t0 = Instant::now();
     let mut list = query.iter().collect::<Vec<_>>();
     let sort_axis = broad.to_owned();
 
     // Sort the array on currently selected sorting axis
-    list.sort_by(|(_, a), (_, b)| {
+    list.sort_unstable_by(|(_, a), (_, b)| {
         // Sort on minimum value along either x, y, or z axis
         let min_a = a.mins[sort_axis];
         let min_b = b.mins[sort_axis];
@@ -164,6 +166,7 @@ pub fn broadphase_system_array(
         std::cmp::Ordering::Equal
     });
 
+    //let t1= Instant::now();
     // Sweep the array for collisions
     let mut s = [0.0f32; 3];
     let mut s2 = [0.0f32; 3];
@@ -206,6 +209,9 @@ pub fn broadphase_system_array(
     if v[2] > v[sort_axis] {
         *broad = 2;
     }
+
+    //let t2 = Instant::now();
+    //println!("Broadphase: sort - {:?}, sweep - {:?}", t1.duration_since(t0), t2.duration_since(t1));
 }
 
 #[derive(Component)]

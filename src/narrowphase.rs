@@ -18,7 +18,7 @@ pub fn narrowphase_system(
     mut contacts: EventWriter<Contact>,
     mut manifolds: Query<&mut Manifold>,
     mut collision_pairs: EventReader<ContactMaybe>,
-) {    
+) {
     // test possable contacts collisions
     for pair in collision_pairs.iter() {
         // SAFETY: There is no way for a and b to the same entity
