@@ -3,13 +3,15 @@ use bevy::{prelude::*, render::primitives::Aabb};
 use crate::{
     body::Body,
     contact::{ContactMaybe, PsuedoBody},
-    PhysicsTime,
+    PhysicsTime, bounds::Bounds,
 };
 
 // Broadphase (build potential collision pairs)
-// sweep and prune 1d
+// Playing around with a few different solutions here
+
+// sweep and prune 1d, this is from the physics weekend book
 pub fn broadphase_system(
-    query: Query<(Entity, &Body, &Transform)>,
+    bodies: Query<(Entity, &Body, &Transform)>,
     pt: Res<PhysicsTime>,
     mut sorted_bodies: Local<Vec<PsuedoBody>>,
     mut collison_pairs: EventWriter<ContactMaybe>,
@@ -18,7 +20,9 @@ pub fn broadphase_system(
 
     // running sweep and prune in 1 direction to test for intersection
     let axis = Vec3::ONE.normalize();
-    for (entity, body, t) in query.iter() {
+    for (entity, body, t) in bodies.iter() {
+
+        // copy the bounds so we can expand it
         let mut bounds = body.collider.bounds(t);
 
         // expand the bounds by the linear velocity
@@ -29,21 +33,24 @@ pub fn broadphase_system(
         bounds.expand_by_point(bounds.mins - Vec3::splat(BOUNDS_EPS));
         bounds.expand_by_point(bounds.maxs + Vec3::splat(BOUNDS_EPS));
 
+        // find the min and max of the bounds in the direction of the axis
+        // TODO: try out vec3a here
         sorted_bodies.push(PsuedoBody {
-            entity,
-            value: axis.dot(bounds.mins),
-            is_min: true,
-        });
-        sorted_bodies.push(PsuedoBody {
-            entity,
-            value: axis.dot(bounds.maxs),
-            is_min: false,
-        });
+             entity,
+             value: axis.dot(bounds.mins),
+             is_min: true,
+         });
+         sorted_bodies.push(PsuedoBody {
+             entity,
+             value: axis.dot(bounds.maxs),
+             is_min: false,
+         });
     }
+
     sorted_bodies.sort_unstable_by(PsuedoBody::compare_sat);
 
-    // Build pairs
-    // Now that the bodies are sorted, build the collision pairs
+    // Now that the bodies are sorted, we can iterate through them and send them to narrow phase
+    // if they overlap
     for (i, a) in sorted_bodies.iter().enumerate() {
         if !a.is_min {
             continue;
@@ -69,7 +76,7 @@ pub fn broadphase_system(
 
 
 
-// Broadphase (build potential collision pairs)
+
 // wanted to test using the render Aabb
 // TODO: Only a test for now
 pub fn broadphase_system_aabb(
@@ -105,3 +112,29 @@ pub fn broadphase_system_aabb(
     }
 }
 
+fn broadphase_system_3d(
+    //mut sort_axis: Local<usize> // Specifies axis (0/1/2) to sort on (here arbitrarily initialized)
+) {
+    // sort_axis = 0;
+    // if v[1] > v[0] {
+    //     sort_axis = 1;
+    // }
+    // if v[2] > v[sort_axis] {
+    //     sort_axis = 2;
+    // } 
+}
+
+// // Comparison function for qsort. Given two arguments A and B must return a
+// // value of less than zero if A < B, zero if A = B, and greater than zero if A>B
+// fn cmpAABBs(a: &Bounds, b: &Bounds) -> i32 {
+//     // Sort on minimum value along either x, y, or z (specified in gSortAxis)
+//     let minA = a.mins.x; //[sort_axis]
+//     let minB = a.mins.x; //[sort_axis]
+//     if minA < minB {
+//         return -1;
+//     }
+//     if minA > minB {
+//         return 1;
+//     }
+//     0
+//}

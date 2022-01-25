@@ -33,7 +33,7 @@ fn setup_level(
         for i in 0..1 {
             commands
                 .spawn_bundle(PbrBundle {
-                    transform: Transform::from_xyz(i as f32 * 2.2, 2.0, 0.0),
+                    transform: Transform::from_xyz(i as f32 * 2.0, 2.0, 0.0),
                     mesh: meshes.add(Mesh::from(bevy::render::mesh::shape::UVSphere {
                         radius: 1.0,
                         ..Default::default()
@@ -47,7 +47,7 @@ fn setup_level(
                 .insert(Body {
                     collider: Collider::from(Sphere { radius: 1.0 }),
                     inv_mass: 1.0,
-                    elasticity: 1.0,
+                    elasticity: 0.9,
                     friction: 0.5,
                     ..Default::default()
                 })

@@ -12,7 +12,10 @@ impl Plugin for ResetPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<ResetEvent>()
             .add_startup_system(setup)
-            .add_system( reset_level.after(PhysicsSystem::First));
+            .add_system_to_stage(
+                CoreStage::PreUpdate,
+                reset_level.after(PhysicsSystem::First),
+            );
     }
 }
 
@@ -35,4 +38,3 @@ fn reset_level(
         ev_reset.send(ResetEvent);
     }
 }
-

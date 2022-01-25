@@ -5,7 +5,7 @@ use crate::{
     manifold::{Manifold, ManifoldConstraint, },
     intersect::{intersect_dynamic, sphere_sphere_static},
     prelude::{ConstraintConfig, ConstraintPenetration, Contact, ContactMaybe, ShapeType},
-    ContactVec, PhysicsTime,
+    PhysicsTime,
 };
 
 const MAX_CONTACTS: usize = 4;
@@ -15,12 +15,10 @@ pub fn narrowphase_system(
     mut commands: Commands,
     pt: Res<PhysicsTime>,
     bodies: Query<(&Body, &Transform)>,
-    mut contacts: ResMut<ContactVec>,
+    mut contacts: EventWriter<Contact>,
     mut manifolds: Query<&mut Manifold>,
     mut collision_pairs: EventReader<ContactMaybe>,
-) {
-    contacts.0.clear();
-
+) {    
     // test possable contacts collisions
     for pair in collision_pairs.iter() {
         // SAFETY: There is no way for a and b to the same entity
@@ -108,22 +106,12 @@ pub fn narrowphase_system(
                     }
                 } else {
                     // ballistic contact
-                    contacts.0.push(contact)
+                    contacts.send(contact)
                 }
             }
         }
     }
 
-    // sort the times of impact from earliest to latest
-    contacts.0.sort_unstable_by(|a, b| {
-        if a.time_of_impact < b.time_of_impact {
-            std::cmp::Ordering::Less
-        } else if a.time_of_impact == b.time_of_impact {
-            std::cmp::Ordering::Equal
-        } else {
-            std::cmp::Ordering::Greater
-        }
-    });
 }
 
 fn add_manifold_contact(
@@ -230,11 +218,9 @@ pub fn narrowphase_system_static(
     mut contacts: EventWriter<Contact>,
     bodies: Query<(&Body, &Transform)>,
 ) {
-
     for pair in collison_pairs.iter() {
-
-        // SAFETY: There is no way for a and b to the same entity
-        // see https://github.com/bevyengine/bevy/issues/2042
+        //SAFETY: There is no way for a and b to the same entity
+        //see https://github.com/bevyengine/bevy/issues/2042
         unsafe {
             let (body_a, transform_a) = bodies.get_unchecked(pair.a).unwrap();
             let (body_b, transform_b) = bodies.get_unchecked(pair.b).unwrap();
@@ -243,58 +229,41 @@ pub fn narrowphase_system_static(
                 continue;
             }
 
-            if let Some(contact) = intersect_static(pair.a, body_a, transform_a, pair.b, body_b, transform_b) {
-                //info!("Collision between {:?} and {:?}", pair.a, pair.b);
-                contacts.send(contact);
+            match (body_a.collider.shape, body_b.collider.shape) {
+                (ShapeType::Sphere { radius: radius_a }, ShapeType::Sphere { radius: radius_b }) => {
+                    if let Some((local_point_a, local_point_b)) = sphere_sphere_static(
+                        radius_a,
+                        radius_b,
+                        transform_a.translation,
+                        transform_b.translation,
+                    ) {
+                        let normal = (transform_a.translation - transform_b.translation).normalize();
+        
+                        // calculate the separation distance
+                        let ab = transform_a.translation - transform_b.translation;
+                        let separation_dist = ab.length() - (radius_a + radius_b);
+                        contacts.send(Contact {
+                            entity_a: pair.a,
+                            entity_b: pair.b,
+                            world_point_a: local_point_a,
+                            world_point_b: local_point_b,
+                            local_point_a,
+                            local_point_b,
+                            normal,
+                            separation_dist,
+                            time_of_impact: 0.0,
+                        });
+                    };
+                }
+                // (ShapeType::Sphere { radius }, ShapeType::Box) => todo!(),
+                // (ShapeType::Sphere { radius }, ShapeType::Convex) => todo!(),
+                // (ShapeType::Box, ShapeType::Sphere { radius }) => todo!(),
+                // (ShapeType::Box, ShapeType::Box) => todo!(),
+                // (ShapeType::Box, ShapeType::Convex) => todo!(),
+                // (ShapeType::Convex, ShapeType::Sphere { radius }) => todo!(),
+                // (ShapeType::Convex, ShapeType::Box) => todo!(),
+                (_, _) => todo!(),
             }
         }
-    }
-
-}
-
-
-fn intersect_static(
-    a: Entity,
-    body_a: &Body,
-    transform_a: &Transform,
-    b: Entity,
-    body_b: &Body,
-    transform_b: &Transform,
-) -> Option<Contact> {
-    match (body_a.collider.shape, body_b.collider.shape) {
-        (ShapeType::Sphere { radius: radius_a }, ShapeType::Sphere { radius: radius_b }) => {
-            if let Some((local_point_a, local_point_b)) = sphere_sphere_static(
-                radius_a,
-                radius_b,
-                transform_a.translation,
-                transform_b.translation,
-            ) {
-                let normal = (transform_a.translation - transform_b.translation).normalize();
-
-                // calculate the separation distance
-                let ab = transform_a.translation - transform_b.translation;
-                let separation_dist = ab.length() - (radius_a + radius_b);
-                return Some(Contact {
-                    entity_a: a,
-                    entity_b: b,
-                    world_point_a: local_point_a,
-                    world_point_b: local_point_b,
-                    local_point_a,
-                    local_point_b,
-                    normal,
-                    separation_dist,
-                    time_of_impact: 0.0,
-                })
-            };
-            None
-        }
-        // (ShapeType::Sphere { radius }, ShapeType::Box) => todo!(),
-        // (ShapeType::Sphere { radius }, ShapeType::Convex) => todo!(),
-        // (ShapeType::Box, ShapeType::Sphere { radius }) => todo!(),
-        // (ShapeType::Box, ShapeType::Box) => todo!(),
-        // (ShapeType::Box, ShapeType::Convex) => todo!(),
-        // (ShapeType::Convex, ShapeType::Sphere { radius }) => todo!(),
-        // (ShapeType::Convex, ShapeType::Box) => todo!(),
-        (_, _) => todo!(),
     }
 }

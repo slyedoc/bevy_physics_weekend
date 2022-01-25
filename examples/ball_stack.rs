@@ -62,8 +62,8 @@ fn setup_level(
                 .insert(Body {
                     collider: Collider::from(Sphere { radius: stack_config.ball_radius }),
                     inv_mass: 1.0,
-                    elasticity: 1.0,
-                    friction: 0.1,
+                    elasticity: 0.9,
+                    friction: 0.5,
                     ..Default::default()
                 })
                 .insert(helper::Reset)

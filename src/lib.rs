@@ -4,30 +4,28 @@
 
 mod body;
 mod bounds;
+mod broadphase;
 mod colliders;
 mod constraints;
 mod contact;
 mod debug_render;
+mod dynamics;
 mod gjk;
 mod intersect;
-mod math;
-mod broadphase;
-mod narrowphase;
 mod manifold;
-mod dynamics;
+mod math;
+mod narrowphase;
 mod resolve_contact;
 
 use bevy::{ecs::schedule::ShouldRun, prelude::*};
 use bevy_inspector_egui::Inspectable;
 
 use bevy_polyline::*;
-use body::Body;
-use constraints::ConstraintPenetration;
 use contact::{Contact, ContactMaybe};
-use manifold::Manifold;
 pub mod prelude {
     pub use crate::{
-        body::*, colliders::*, constraints::*, contact::*, PhysicsConfig, PhysicsPlugin, debug_render::*,
+        body::*, colliders::*, constraints::*, contact::*, debug_render::*, PhysicsConfig,
+        PhysicsPlugin,
     };
 }
 
@@ -71,82 +69,85 @@ pub enum PhysicsSystem {
 pub struct PhysicsPlugin;
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(PolylinePlugin) // TODO: Make this optional
-            .add_event::<Contact>()
+        app.add_event::<Contact>()
             .add_event::<ContactMaybe>()
-            .add_system_set(
+            .add_system_set_to_stage(
+                CoreStage::PreUpdate,
                 SystemSet::new()
                     .with_run_criteria(run_physics)
                     .label(PhysicsSystem::First)
-                    .with_system(timestep_system)
-                    //.with_system(manifold_remove_expired_system),
+                    .with_system(timestep_system), //.with_system(manifold_remove_expired_system),
             )
-            .add_system_set(
+            .add_system_set_to_stage(
+                CoreStage::PreUpdate,
                 SystemSet::new()
                     .with_run_criteria(run_physics)
                     .label(PhysicsSystem::Dynamics)
-                    .after(PhysicsSystem::First)
+                    .after(PhysicsSystem::First) // chaining
                     .with_system(dynamics::dynamics_gravity_system),
             )
-            .add_system_set(
+            .add_system_set_to_stage(
+                CoreStage::PreUpdate,
                 SystemSet::new()
                     .with_run_criteria(run_physics)
                     .label(PhysicsSystem::Broadphase)
-                    .after(PhysicsSystem::Dynamics)
+                    .after(PhysicsSystem::Dynamics) // chaining
                     .with_system(broadphase::broadphase_system),
-            ).add_system_set(
+                    //.with_system(broadphase::broadphase_system_aabb),
+            )
+            .add_system_set_to_stage(
+                CoreStage::PreUpdate,
                 SystemSet::new()
                     .with_run_criteria(run_physics)
                     .label(PhysicsSystem::Narrowphase)
-                    .after(PhysicsSystem::Broadphase)
+                    .after(PhysicsSystem::Broadphase) // chaining
                     //.with_system(narrowphase::narrowphase_system),
                     .with_system(narrowphase::narrowphase_system_static),
-            ).add_system_set(
+            )
+            .add_system_set_to_stage(
+                CoreStage::PreUpdate,
                 SystemSet::new()
                     .with_run_criteria(run_physics)
+                    .label(PhysicsSystem::ResolveContact) // chaining
                     .after(PhysicsSystem::Broadphase)
-                    .label(PhysicsSystem::ResolveContact)
                     .with_system(resolve_contact::resolve_contact_system),
             );
-            // .add_system_set(
-            //     SystemSet::new()
-            //         .with_run_criteria(run_physics)
-            //         .label(PhysicsSystem::ConstraintsPreSolve)
-            //         .after(PhysicsSystem::Narrowphase)
-            //         .with_system(constraints::constraint_penetration::pre_solve_system), //.with_system(constraints::post_solve_system::<ConstraintPenetration>)
-            // )
-            // .add_system_set(
-            //     SystemSet::new()
-            //         .with_run_criteria(run_physics)
-            //         .label(PhysicsSystem::ConstraintsSolve)
-            //         .after(PhysicsSystem::ConstraintsPreSolve)
-            //         .with_system(constraints::constraint_penetration::solve_system),
-            // );
-            // // TODO: Make this optional
-            // .add_system_set(
-            //     SystemSet::new()
-            //         .after(PhysicsSystem::ConstraintsSolve)
-            //         .with_run_criteria(run_physics)
-            //         .with_system(report_system),
-            // )
-            // // Debug Render
-            app.add_system_set(
-                SystemSet::new()
-                    .after(PhysicsSystem::ResolveContact)
-                    .with_system(debug_render::report_system),
-            );
+        // .add_system_set(
+        //     SystemSet::new()
+        //         .with_run_criteria(run_physics)
+        //         .label(PhysicsSystem::ConstraintsPreSolve)
+        //         .after(PhysicsSystem::Narrowphase)
+        //         .with_system(constraints::constraint_penetration::pre_solve_system), //.with_system(constraints::post_solve_system::<ConstraintPenetration>)
+        // )
+        // .add_system_set(
+        //     SystemSet::new()
+        //         .with_run_criteria(run_physics)
+        //         .label(PhysicsSystem::ConstraintsSolve)
+        //         .after(PhysicsSystem::ConstraintsPreSolve)
+        //         .with_system(constraints::constraint_penetration::solve_system),
+        // );
+        // // TODO: Make this optional
+        // .add_system_set(
+        //     SystemSet::new()
+        //         .after(PhysicsSystem::ConstraintsSolve)
+        //         .with_run_criteria(run_physics)
+        //         .with_system(report_system),
+        // )
 
+        // Debug Render
+        // TODO: Make this optional
+        app.add_plugin(PolylinePlugin).add_system_set_to_stage(
+            CoreStage::PreUpdate,
+            SystemSet::new()
+                .after(PhysicsSystem::ResolveContact)
+                .with_system(debug_render::report_system),
+        );
 
         // Add resources
         app.init_resource::<PhysicsConfig>();
         app.init_resource::<PhysicsTime>();
-
-        // TODO: Move these to Components
-        app.init_resource::<ContactVec>();
     }
 }
-
-
 
 fn run_physics(config: Res<PhysicsConfig>) -> ShouldRun {
     if config.time_dilation != 0.0 && config.enabled {
@@ -158,13 +159,4 @@ fn run_physics(config: Res<PhysicsConfig>) -> ShouldRun {
 
 fn timestep_system(time: Res<Time>, config: Res<PhysicsConfig>, mut pt: ResMut<PhysicsTime>) {
     pt.time = time.delta_seconds() * config.time_dilation;
-}
-
-
-pub struct ContactVec(pub Vec<Contact>);
-
-impl Default for ContactVec {
-    fn default() -> Self {
-        Self(Vec::<Contact>::with_capacity(50000))
-    }
 }
