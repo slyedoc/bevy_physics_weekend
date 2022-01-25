@@ -19,6 +19,7 @@ fn main() {
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         //.add_plugin(RapierRenderPlugin)
         .add_plugin(InspectorPlugin::<BallStackConfig>::new())
+        .add_system(helper::ball_stack::ball_count_system)
         .add_startup_system(setup)
         .add_system(setup_level)
         .run();

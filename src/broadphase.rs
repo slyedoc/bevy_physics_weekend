@@ -1,14 +1,15 @@
-use bevy::{prelude::*, render::primitives::Aabb};
+use bevy::prelude::*;
 
 use crate::{
     body::Body,
     contact::{ContactMaybe, PsuedoBody},
-    PhysicsTime, bounds::Bounds,
+    PhysicsTime,
 };
 
 // Broadphase (build potential collision pairs)
-// Playing around with a few different solutions here
 
+
+// Playing around with a few different solutions here
 // sweep and prune 1d, this is from the physics weekend book
 pub fn broadphase_system(
     bodies: Query<(Entity, &Body, &Transform)>,
@@ -21,7 +22,6 @@ pub fn broadphase_system(
     // running sweep and prune in 1 direction to test for intersection
     let axis = Vec3::ONE.normalize();
     for (entity, body, t) in bodies.iter() {
-
         // copy the bounds so we can expand it
         let mut bounds = body.collider.bounds(t);
 
@@ -36,15 +36,15 @@ pub fn broadphase_system(
         // find the min and max of the bounds in the direction of the axis
         // TODO: try out vec3a here
         sorted_bodies.push(PsuedoBody {
-             entity,
-             value: axis.dot(bounds.mins),
-             is_min: true,
-         });
-         sorted_bodies.push(PsuedoBody {
-             entity,
-             value: axis.dot(bounds.maxs),
-             is_min: false,
-         });
+            entity,
+            value: axis.dot(bounds.mins),
+            is_min: true,
+        });
+        sorted_bodies.push(PsuedoBody {
+            entity,
+            value: axis.dot(bounds.maxs),
+            is_min: false,
+        });
     }
 
     sorted_bodies.sort_unstable_by(PsuedoBody::compare_sat);
@@ -74,13 +74,10 @@ pub fn broadphase_system(
     }
 }
 
-
-
-
 // wanted to test using the render Aabb
 // TODO: Only a test for now
 pub fn broadphase_system_aabb(
-    query: Query<(Entity, &Transform, &Aabb)>,
+    query: Query<(Entity, &Transform, &bevy::render::primitives::Aabb)>,
     //pt: Res<PhysicsTime>,
     mut contact_maybies: EventWriter<ContactMaybe>,
 ) {
@@ -112,29 +109,137 @@ pub fn broadphase_system_aabb(
     }
 }
 
-fn broadphase_system_3d(
-    //mut sort_axis: Local<usize> // Specifies axis (0/1/2) to sort on (here arbitrarily initialized)
-) {
-    // sort_axis = 0;
-    // if v[1] > v[0] {
-    //     sort_axis = 1;
-    // }
-    // if v[2] > v[sort_axis] {
-    //     sort_axis = 2;
-    // } 
+#[derive(Default)]
+pub struct BroadphaseResources {
+    // Specifies axis (0/1/2) to sort on (here arbitrarily initialized)
+    sort_axis: usize,
 }
 
-// // Comparison function for qsort. Given two arguments A and B must return a
-// // value of less than zero if A < B, zero if A = B, and greater than zero if A>B
-// fn cmpAABBs(a: &Bounds, b: &Bounds) -> i32 {
-//     // Sort on minimum value along either x, y, or z (specified in gSortAxis)
-//     let minA = a.mins.x; //[sort_axis]
-//     let minB = a.mins.x; //[sort_axis]
-//     if minA < minB {
-//         return -1;
-//     }
-//     if minA > minB {
-//         return 1;
-//     }
-//     0
-//}
+pub fn add_array(
+    mut commands: Commands,
+    query: Query<(Entity, &Transform, &Body), Added<Body>>,
+    mut broad: ResMut<BroadphaseResources>,
+) {
+    for (e, t, b) in query.iter() {
+        let bounds = b.collider.bounds(t);
+        commands.entity(e).insert(BroadphaseAabb {
+            mins: bounds.mins,
+            maxs: bounds.maxs,
+        });
+    }
+}
+
+pub fn update_array(
+    mut query: Query<(&Transform, &Body, &mut BroadphaseAabb)>,
+) {
+    // TODO: This is a bit of a hack, to track changes
+    for (trans, body, mut aabb) in query.iter_mut() {
+        let bounds = body.collider.bounds(trans);
+        aabb.mins = bounds.mins;
+        aabb.maxs = bounds.maxs;
+    }
+}
+
+pub fn broadphase_system_array(
+    mut broad: Local<usize>,
+    mut contact_maybies: EventWriter<ContactMaybe>,
+    query: Query<(Entity, &BroadphaseAabb)>,
+
+) {
+
+    // Yes, we are copying the array out here, only way to sort it
+    let mut list = query.iter().collect::<Vec<_>>();
+    let sort_axis = broad.to_owned();
+
+    // Sort the array on currently selected sorting axis
+    list.sort_by(|(_, a), (_, b)| {
+        // Sort on minimum value along either x, y, or z axis
+        let min_a = a.mins[sort_axis];
+        let min_b = b.mins[sort_axis];
+        if min_a < min_b {
+            return std::cmp::Ordering::Less;
+        }
+        if min_a > min_b {
+            return std::cmp::Ordering::Greater;
+        }
+        std::cmp::Ordering::Equal
+    });
+
+    // Sweep the array for collisions
+    let mut s = [0.0f32; 3];
+    let mut s2 = [0.0f32; 3];
+    let mut v = [0.0f32; 3];
+
+    for (i, (a, aabb_a )) in list.iter().enumerate() {
+        // Determine AABB center point
+        let p = 0.5 * (aabb_a.mins + aabb_a.maxs);
+
+        // Update sum and sum2 for computing variance of AABB centers
+        for c in 0..3 {
+            s[c] += p[c];
+            s2[c] += p[c] * p[c];
+        }
+        // Test collisions against all possible overlapping AABBs following current one
+        for  (b, aabb_b) in list.iter().skip(i + 1) { // todo: + 1 may be wrong
+            // Stop when tested AABBs are beyond the end of current AABB
+            if aabb_b.mins[sort_axis] > aabb_a.maxs[sort_axis] {
+                break;
+            }
+            if aabb_aabb_overlap(aabb_a, aabb_b) {
+                contact_maybies.send(ContactMaybe {
+                    a: *a,
+                    b: *b,
+                });
+            }
+        }
+    }
+
+    // Compute variance (less a, for comparison unnecessary, constant factor)
+    for c in 0..3 {
+        v[c] = s2[c] - s[c] * s[c] / list.len() as f32;
+    }
+
+    // Update axis sorted to be the one with greatest AABB variance
+    *broad = 0;
+    if v[1] > v[0] {
+        *broad = 1;
+    }
+    if v[2] > v[sort_axis] {
+        *broad = 2;
+    }
+}
+
+#[derive(Component)]
+pub struct BroadphaseAabb {
+    pub mins: Vec3,
+    pub maxs: Vec3,
+}
+
+// Separating Axis Test
+// If there is no overlap on a particular axis,
+// then the two AABBs do not intersect
+fn aabb_aabb_overlap(a: &BroadphaseAabb, b: &BroadphaseAabb) -> bool {
+    if a.mins.x >= b.maxs.x {
+        return false;
+    }
+    if a.maxs.x <= b.mins.x {
+        return false;
+    }
+
+    if a.mins.y >= b.maxs.y {
+        return false;
+    }
+    if a.maxs.y <= b.mins.y {
+        return false;
+    }
+
+    if a.mins.z >= b.maxs.z {
+        return false;
+    }
+    if a.maxs.z <= b.mins.z {
+        return false;
+    }
+
+    // Overlap on all three axes, so their intersection must be non-empty
+    true
+}

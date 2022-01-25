@@ -11,11 +11,16 @@ fn main() {
             ..Default::default()
         })
         .add_plugins(DefaultPlugins)
-        .add_plugins(helper::HelperPlugins)
+
         // our plugin
         .add_plugin(PhysicsPlugin)
+
+        // Custom helpers
+        .add_plugins(helper::HelperPlugins)
+        .add_plugin(InspectorPlugin::<PhysicsConfig>::new())
         .add_plugin(InspectorPlugin::<helper::BallStackConfig>::new())
-        .add_plugin(InspectorPlugin::<PhysicsConfig>::new()) // has to be after inspector plugin
+        .add_system(helper::ball_stack::ball_count_system)
+
         .add_startup_system(setup)
         .add_system(setup_level)
         .run();

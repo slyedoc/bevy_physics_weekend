@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
+#![feature(vec_retain_mut)]
 
 mod body;
 mod bounds;
@@ -21,6 +22,7 @@ use bevy::{ecs::schedule::ShouldRun, prelude::*};
 use bevy_inspector_egui::Inspectable;
 
 use bevy_polyline::*;
+use broadphase::BroadphaseResources;
 use contact::{Contact, ContactMaybe};
 pub mod prelude {
     pub use crate::{
@@ -76,7 +78,10 @@ impl Plugin for PhysicsPlugin {
                 SystemSet::new()
                     .with_run_criteria(run_physics)
                     .label(PhysicsSystem::First)
-                    .with_system(timestep_system), //.with_system(manifold_remove_expired_system),
+                    .with_system(timestep_system)
+                    .with_system(broadphase::update_array)
+                    .with_system(broadphase::add_array)
+                    , //.with_system(manifold_remove_expired_system),
             )
             .add_system_set_to_stage(
                 CoreStage::PreUpdate,
@@ -92,8 +97,9 @@ impl Plugin for PhysicsPlugin {
                     .with_run_criteria(run_physics)
                     .label(PhysicsSystem::Broadphase)
                     .after(PhysicsSystem::Dynamics) // chaining
-                    .with_system(broadphase::broadphase_system),
-                    //.with_system(broadphase::broadphase_system_aabb),
+                    //.with_system(broadphase::broadphase_system)
+                    //.with_system(broadphase::broadphase_system_aabb)
+                    .with_system(broadphase::broadphase_system_array),
             )
             .add_system_set_to_stage(
                 CoreStage::PreUpdate,
@@ -146,6 +152,8 @@ impl Plugin for PhysicsPlugin {
         // Add resources
         app.init_resource::<PhysicsConfig>();
         app.init_resource::<PhysicsTime>();
+
+        app.init_resource::<BroadphaseResources>();
     }
 }
 

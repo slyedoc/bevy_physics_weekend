@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use bevy_inspector_egui::Inspectable;
 
+use super::ResetEvent;
+
 
 #[derive(Inspectable)]
 pub struct BallStackConfig {
@@ -27,7 +29,7 @@ impl FromWorld for BallStackConfig {
         let asset_server = world.get_resource_mut::<AssetServer>().unwrap();
 
         Self {
-            count: 2000,
+            count: 4000,
             base_size: 10,
             grid_offset: 3.0,
             ball_radius: 1.0,
@@ -40,5 +42,20 @@ impl FromWorld for BallStackConfig {
             }),
             start_height: 5.0,
         }
+    }
+}
+
+
+pub fn ball_count_system(
+    input: Res<Input<KeyCode>>,
+    mut config: ResMut<BallStackConfig>,
+) {
+    if input.just_pressed(KeyCode::Equals) {
+        config.count += 1000;
+    }
+
+    if input.just_pressed(KeyCode::Minus) {
+        // TODO: hope I get to increase this
+        config.count = (config.count - 1000).clamp(0, 20000);
     }
 }
