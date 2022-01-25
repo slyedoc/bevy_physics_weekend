@@ -79,8 +79,8 @@ impl Plugin for PhysicsPlugin {
                     .with_run_criteria(run_physics)
                     .label(PhysicsSystem::First)
                     .with_system(timestep_system)
-                    .with_system(broadphase::update_array)
-                    .with_system(broadphase::add_array)
+                    .with_system(broadphase::update_broadphase_array)
+                    .with_system(broadphase::add_broadphase_aabb)
                     , //.with_system(manifold_remove_expired_system),
             )
             .add_system_set_to_stage(

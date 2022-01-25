@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 use bevy_inspector_egui::Inspectable;
 
-use super::ResetEvent;
-
-
 #[derive(Inspectable)]
 pub struct BallStackConfig {
     pub count: usize,
@@ -46,6 +43,7 @@ impl FromWorld for BallStackConfig {
 }
 
 
+#[allow(dead_code)]
 pub fn ball_count_system(
     input: Res<Input<KeyCode>>,
     mut config: ResMut<BallStackConfig>,

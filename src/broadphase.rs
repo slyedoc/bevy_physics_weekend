@@ -115,10 +115,9 @@ pub struct BroadphaseResources {
     sort_axis: usize,
 }
 
-pub fn add_array(
+pub fn add_broadphase_aabb(
     mut commands: Commands,
     query: Query<(Entity, &Transform, &Body), Added<Body>>,
-    mut broad: ResMut<BroadphaseResources>,
 ) {
     for (e, t, b) in query.iter() {
         let bounds = b.collider.bounds(t);
@@ -129,7 +128,7 @@ pub fn add_array(
     }
 }
 
-pub fn update_array(
+pub fn update_broadphase_array(
     mut query: Query<(&Transform, &Body, &mut BroadphaseAabb)>,
 ) {
     // TODO: This is a bit of a hack, to track changes
