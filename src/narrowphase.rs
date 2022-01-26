@@ -4,7 +4,7 @@ use crate::{
     body::Body,
     manifold::{Manifold, ManifoldConstraint, },
     intersect::{intersect_dynamic, sphere_sphere_static},
-    prelude::{ConstraintConfig, ConstraintPenetration, Contact, ContactMaybe, ShapeType},
+    prelude::{ConstraintConfig, ConstraintPenetration, Contact, ContactBroad, ShapeType},
     PhysicsTime,
 };
 
@@ -17,7 +17,7 @@ pub fn narrowphase_system(
     bodies: Query<(&Body, &Transform)>,
     mut contacts: EventWriter<Contact>,
     mut manifolds: Query<&mut Manifold>,
-    mut collision_pairs: EventReader<ContactMaybe>,
+    mut collision_pairs: EventReader<ContactBroad>,
 ) {
     // test possable contacts collisions
     for pair in collision_pairs.iter() {
@@ -214,7 +214,7 @@ fn add_manifold_contact(
 
 
 pub fn narrowphase_system_static(
-    mut collison_pairs: EventReader<ContactMaybe>,
+    mut collison_pairs: EventReader<ContactBroad>,
     mut contacts: EventWriter<Contact>,
     bodies: Query<(&Body, &Transform)>,
 ) {
@@ -263,7 +263,9 @@ pub fn narrowphase_system_static(
                 // (ShapeType::Box, ShapeType::Convex) => todo!(),
                 // (ShapeType::Convex, ShapeType::Sphere { radius }) => todo!(),
                 // (ShapeType::Convex, ShapeType::Box) => todo!(),
-                (_, _) => todo!(),
+                (_, _) => {
+                    
+                },
             }
         }
     }

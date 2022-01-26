@@ -14,18 +14,18 @@ pub struct Contact {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct ContactMaybe {
+pub struct ContactBroad {
     pub a: Entity,
     pub b: Entity,
 }
 
-impl PartialEq for ContactMaybe {
+impl PartialEq for ContactBroad {
     fn eq(&self, other: &Self) -> bool {
         (self.a == other.a && self.b == other.b) || (self.a == other.b && self.b == other.a)
     }
 }
 
-impl Eq for ContactMaybe {}
+impl Eq for ContactBroad {}
 
 #[derive(Copy, Clone, Debug)]
 pub struct PsuedoBody {

@@ -22,7 +22,7 @@ use bevy::{ecs::schedule::ShouldRun, prelude::*};
 use bevy_inspector_egui::Inspectable;
 
 use bevy_polyline::*;
-use contact::{Contact, ContactMaybe};
+use contact::{Contact, ContactBroad};
 pub mod prelude {
     pub use crate::{
         body::*, colliders::*, constraints::*, contact::*, debug_render::*, PhysicsConfig,
@@ -36,7 +36,7 @@ pub struct PhysicsConfig {
     #[inspectable(min = -10.0, max = 10.0)]
     pub time_dilation: f32,
     pub gravity: Vec3,
-    pub constrain_max_iter: usize, // solve constraints,
+    pub constrain_max_iter: usize,
 }
 
 #[derive(Default)]
@@ -71,7 +71,7 @@ pub struct PhysicsPlugin;
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<Contact>()
-            .add_event::<ContactMaybe>()
+            .add_event::<ContactBroad>()
             .add_system_set_to_stage(
                 CoreStage::PreUpdate,
                 SystemSet::new()
@@ -79,8 +79,8 @@ impl Plugin for PhysicsPlugin {
                     .label(PhysicsSystem::First)
                     .with_system(timestep_system)
                     .with_system(broadphase::update_broadphase_array)
-                    .with_system(broadphase::add_broadphase_aabb)
-                    , //.with_system(manifold_remove_expired_system),
+                    .with_system(broadphase::add_broadphase_aabb),
+                    //.with_system(manifold_remove_expired_system),
             )
             .add_system_set_to_stage(
                 CoreStage::PreUpdate,

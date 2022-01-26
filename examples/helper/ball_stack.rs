@@ -26,8 +26,8 @@ impl FromWorld for BallStackConfig {
         let asset_server = world.get_resource_mut::<AssetServer>().unwrap();
 
         Self {
-            count: 10000,
-            base_size: 20,
+            count: 1000,
+            base_size: 10,
             grid_offset: 3.0,
             ball_radius: 1.0,
             ball_sectors: 8,

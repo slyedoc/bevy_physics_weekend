@@ -2,22 +2,96 @@ use bevy::prelude::*;
 
 #[allow(unused_imports)]
 use bevy::utils::Instant;
+use rayon::prelude::*;
 
 use crate::{
     body::Body,
-    contact::{ContactMaybe, PsuedoBody},
+    contact::{ContactBroad, PsuedoBody},
     PhysicsTime,
 };
 
-// Broadphase (build potential collision pairs)
-
 // Playing around with a few different solutions here
+
+
+// Array based sort and sweep algorithm
+// from Real-Time Collision Dection - Christer Ericon page 336
+pub fn broadphase_system_array(
+    mut broad: Local<usize>,
+    mut contact_maybies: EventWriter<ContactBroad>,
+    query: Query<(Entity, &BroadphaseAabb)>,
+) {
+    // TODO: Yes, we are copying the array out here, only way to sort it
+    // Ideally we would keep the array around, it should already near sorted
+    // but this is still far faster
+    let mut list = query.iter().collect::<Vec<_>>();
+    let sort_axis = broad.to_owned();
+
+    // Sort the array on currently selected sorting axis
+    // PERF: par_sort helps but this is not where the time is spent
+    list.par_sort_unstable_by(|(_, a), (_, b)| {
+        // Sort on minimum value along either x, y, or z axis
+        let min_a = a.mins[sort_axis];
+        let min_b = b.mins[sort_axis];
+        if min_a < min_b {
+            return std::cmp::Ordering::Less;
+        }
+        if min_a > min_b {
+            return std::cmp::Ordering::Greater;
+        }
+        std::cmp::Ordering::Equal
+    });
+
+    // Sweep the array for collisions
+    // This is where 90% of the time is spent
+    let mut s = [0.0f32; 3];
+    let mut s2 = [0.0f32; 3];
+    let mut v = [0.0f32; 3];
+
+    for (i, (a, aabb_a)) in list.iter().enumerate() {
+        // Determine AABB center point
+        let p = 0.5 * (aabb_a.mins + aabb_a.maxs);
+
+        // Update sum and sum2 for computing variance of AABB centers
+        for c in 0..3 {
+            s[c] += p[c];
+            s2[c] += p[c] * p[c];
+        }
+        // Test collisions against all possible overlapping AABBs following current one
+        for (b, aabb_b) in list.iter().skip(i + 1) {
+            // todo: + 1 may be wrong
+            // Stop when tested AABBs are beyond the end of current AABB
+            if aabb_b.mins[sort_axis] > aabb_a.maxs[sort_axis] {
+                break;
+            }
+            if aabb_aabb_interect(aabb_a, aabb_b) {
+                contact_maybies.send(ContactBroad { a: *a, b: *b });
+            }
+        }
+    }
+
+    // Compute variance (less a, for comparison unnecessary, constant factor)
+    for c in 0..3 {
+        v[c] = s2[c] - s[c] * s[c] / list.len() as f32;
+    }
+
+    // Update axis sorted to be the one with greatest AABB variance
+    *broad = 0;
+    if v[1] > v[0] {
+        *broad = 1;
+    }
+    if v[2] > v[sort_axis] {
+        *broad = 2;
+    }
+}
+
+// The was the first solution from weekend series
+// Broadphase (build potential collision pairs)
 // sweep and prune 1d, this is from the physics weekend book
-pub fn broadphase_system(
+pub fn broadphase_system_weekend(
     bodies: Query<(Entity, &Body, &Transform)>,
     pt: Res<PhysicsTime>,
     mut sorted_bodies: Local<Vec<PsuedoBody>>,
-    mut collison_pairs: EventWriter<ContactMaybe>,
+    mut collison_pairs: EventWriter<ContactBroad>,
 ) {
     sorted_bodies.clear();
 
@@ -68,116 +142,11 @@ pub fn broadphase_system(
                 continue;
             }
 
-            collison_pairs.send(ContactMaybe {
+            collison_pairs.send(ContactBroad {
                 a: a.entity,
                 b: b.entity,
             });
         }
-    }
-}
-
-// wanted to test using the render Aabb
-// TODO: Only a test for now
-pub fn broadphase_system_aabb(
-    query: Query<(Entity, &Transform, &bevy::render::primitives::Aabb)>,
-    //pt: Res<PhysicsTime>,
-    mut contact_maybies: EventWriter<ContactMaybe>,
-) {
-    let mut iter = query.iter_combinations();
-    while let Some([(e1, trans_a, aabb_a), (e2, trans_b, aabb_b)]) = iter.fetch_next() {
-        let mut aabb_a = aabb_a.clone();
-        aabb_a.center += trans_a.translation;
-        //aabb_a.half_extents = body_a.linear_velocity * pt.time * 0.5;
-
-        let mut aabb_b = aabb_b.clone();
-        aabb_b.center += trans_b.translation;
-        //aabb_a.half_extents = body_b.linear_velocity * pt.time * 0.5;
-
-        //     const BOUNDS_EPS: f32 = 0.01;
-        //     bounds.expand_by_point(bounds.mins - Vec3::splat(BOUNDS_EPS));
-        //     bounds.expand_by_point(bounds.maxs + Vec3::splat(BOUNDS_EPS));
-
-        if (aabb_a.center.x - aabb_a.half_extents.x <= aabb_b.center.x + aabb_b.half_extents.x
-            && aabb_a.center.x + aabb_a.half_extents.x >= aabb_b.center.x - aabb_b.half_extents.x)
-            && (aabb_a.center.y - aabb_a.half_extents.y <= aabb_b.center.y + aabb_b.half_extents.y
-                && aabb_a.center.y + aabb_a.half_extents.y
-                    >= aabb_b.center.y - aabb_b.half_extents.y)
-            && (aabb_a.center.z - aabb_a.half_extents.z <= aabb_b.center.z + aabb_b.half_extents.z
-                && aabb_a.center.z + aabb_a.half_extents.z
-                    >= aabb_b.center.z - aabb_b.half_extents.z)
-        {
-            contact_maybies.send(ContactMaybe { a: e1, b: e2 });
-        }
-    }
-}
-
-// Array based sort and sweep algorithm
-// from Real-Time Collision Dection - Christer Ericon page 336
-pub fn broadphase_system_array(
-    mut broad: Local<usize>,
-    mut contact_maybies: EventWriter<ContactMaybe>,
-    query: Query<(Entity, &BroadphaseAabb)>,
-) {
-    // TODO: Yes, we are copying the array out here, only way to sort it
-    // Ideally we would keep the array around, it should already near sorted
-    // but this is still far faster than my first broadphase
-    let mut list = query.iter().collect::<Vec<_>>();
-    let sort_axis = broad.to_owned();
-
-    // Sort the array on currently selected sorting axis
-    // TODO: par_sort really helps
-    list.sort_unstable_by(|(_, a), (_, b)| {
-        // Sort on minimum value along either x, y, or z axis
-        let min_a = a.mins[sort_axis];
-        let min_b = b.mins[sort_axis];
-        if min_a < min_b {
-            return std::cmp::Ordering::Less;
-        }
-        if min_a > min_b {
-            return std::cmp::Ordering::Greater;
-        }
-        std::cmp::Ordering::Equal
-    });
-
-    // Sweep the array for collisions
-    let mut s = [0.0f32; 3];
-    let mut s2 = [0.0f32; 3];
-    let mut v = [0.0f32; 3];
-
-    for (i, (a, aabb_a)) in list.iter().enumerate() {
-        // Determine AABB center point
-        let p = 0.5 * (aabb_a.mins + aabb_a.maxs);
-
-        // Update sum and sum2 for computing variance of AABB centers
-        for c in 0..3 {
-            s[c] += p[c];
-            s2[c] += p[c] * p[c];
-        }
-        // Test collisions against all possible overlapping AABBs following current one
-        for (b, aabb_b) in list.iter().skip(i + 1) {
-            // todo: + 1 may be wrong
-            // Stop when tested AABBs are beyond the end of current AABB
-            if aabb_b.mins[sort_axis] > aabb_a.maxs[sort_axis] {
-                break;
-            }
-            if aabb_aabb_interect(aabb_a, aabb_b) {
-                contact_maybies.send(ContactMaybe { a: *a, b: *b });
-            }
-        }
-    }
-
-    // Compute variance (less a, for comparison unnecessary, constant factor)
-    for c in 0..3 {
-        v[c] = s2[c] - s[c] * s[c] / list.len() as f32;
-    }
-
-    // Update axis sorted to be the one with greatest AABB variance
-    *broad = 0;
-    if v[1] > v[0] {
-        *broad = 1;
-    }
-    if v[2] > v[sort_axis] {
-        *broad = 2;
     }
 }
 

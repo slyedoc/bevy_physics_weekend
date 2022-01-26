@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy_inspector_egui::Inspectable;
 use bevy_polyline::*;
 
-use crate::{PhysicsTime, prelude::{Body, ContactMaybe, Contact, ConstraintPenetration}, manifold::Manifold};
+use crate::{PhysicsTime, prelude::{Body, ContactBroad, Contact, ConstraintPenetration}, manifold::Manifold};
 
 #[derive(Inspectable,Default, Debug, Copy, Clone)]
 pub struct PhysicsReport {
@@ -18,7 +18,7 @@ pub struct PhysicsReport {
 pub fn report_system(
     pt: Res<PhysicsTime>,
     bodies: Query<(&Body, &Transform)>,
-    mut collision_pairs: EventReader<ContactMaybe>,
+    mut collision_pairs: EventReader<ContactBroad>,
     mut contacts: EventReader<Contact>,
     manifolds: Query<&Manifold>,
     constraint_penetrations: Query<&ConstraintPenetration>,
