@@ -87,7 +87,7 @@ impl Collider {
                 max_speed
             },
             ShapeType::Convex => todo!(),
-            ShapeType::Plane { point } => todo!(),
+            ShapeType::Plane { point: _ } => todo!(),
         }
     }
 }

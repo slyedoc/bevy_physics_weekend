@@ -26,7 +26,7 @@ impl FromWorld for BallStackConfig {
         let asset_server = world.get_resource_mut::<AssetServer>().unwrap();
 
         Self {
-            count: 20000,
+            count: 10000,
             base_size: 20,
             grid_offset: 3.0,
             ball_radius: 1.0,
@@ -53,7 +53,6 @@ pub fn ball_count_system(
     }
 
     if input.just_pressed(KeyCode::Minus) {
-        // TODO: hope I get to increase this
-        config.count = (config.count - 1000).clamp(0, 20000);
+        config.count = (config.count - 1000).clamp(0, 50000);
     }
 }

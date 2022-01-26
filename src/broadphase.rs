@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use rayon::prelude::*;
 
 #[allow(unused_imports)]
 use bevy::utils::Instant;
@@ -122,11 +121,8 @@ pub fn broadphase_system_array(
     // TODO: Yes, we are copying the array out here, only way to sort it
     // Ideally we would keep the array around, it should already near sorted
     // but this is still far faster than my first broadphase
-    let t0 = Instant::now();
     let mut list = query.iter().collect::<Vec<_>>();
     let sort_axis = broad.to_owned();
-
-    let t1 = Instant::now();
 
     // Sort the array on currently selected sorting axis
     // TODO: par_sort really helps
@@ -143,7 +139,6 @@ pub fn broadphase_system_array(
         std::cmp::Ordering::Equal
     });
 
-    let t2 = Instant::now();
     // Sweep the array for collisions
     let mut s = [0.0f32; 3];
     let mut s2 = [0.0f32; 3];
@@ -184,15 +179,6 @@ pub fn broadphase_system_array(
     if v[2] > v[sort_axis] {
         *broad = 2;
     }
-
-    let t3 = Instant::now();
-    println!(
-        "Broadphase: total - {:?}, copy: {:?}, sort - {:?}, sweep - {:?}",
-        t3.duration_since(t0),
-        t1.duration_since(t0),
-        t2.duration_since(t1),
-        t3.duration_since(t2)
-    );
 }
 
 pub fn add_broadphase_aabb(
