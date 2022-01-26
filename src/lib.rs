@@ -22,7 +22,6 @@ use bevy::{ecs::schedule::ShouldRun, prelude::*};
 use bevy_inspector_egui::Inspectable;
 
 use bevy_polyline::*;
-use broadphase::BroadphaseResources;
 use contact::{Contact, ContactMaybe};
 pub mod prelude {
     pub use crate::{
@@ -152,8 +151,6 @@ impl Plugin for PhysicsPlugin {
         // Add resources
         app.init_resource::<PhysicsConfig>();
         app.init_resource::<PhysicsTime>();
-
-        app.init_resource::<BroadphaseResources>();
     }
 }
 

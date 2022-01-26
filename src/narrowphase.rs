@@ -228,6 +228,7 @@ pub fn narrowphase_system_static(
             if body_a.has_infinite_mass() && body_b.has_infinite_mass() {
                 continue;
             }
+            
 
             match (body_a.collider.shape, body_b.collider.shape) {
                 (ShapeType::Sphere { radius: radius_a }, ShapeType::Sphere { radius: radius_b }) => {

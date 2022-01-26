@@ -1,4 +1,8 @@
-use bevy::{prelude::*, utils::Instant};
+use bevy::prelude::*;
+use rayon::prelude::*;
+
+#[allow(unused_imports)]
+use bevy::utils::Instant;
 
 use crate::{
     body::Body,
@@ -7,7 +11,6 @@ use crate::{
 };
 
 // Broadphase (build potential collision pairs)
-
 
 // Playing around with a few different solutions here
 // sweep and prune 1d, this is from the physics weekend book
@@ -109,50 +112,24 @@ pub fn broadphase_system_aabb(
     }
 }
 
-#[derive(Default)]
-pub struct BroadphaseResources {
-    // Specifies axis (0/1/2) to sort on (here arbitrarily initialized)
-    sort_axis: usize,
-}
-
-pub fn add_broadphase_aabb(
-    mut commands: Commands,
-    query: Query<(Entity, &Transform, &Body), Added<Body>>,
-) {
-    for (e, t, b) in query.iter() {
-        let bounds = b.collider.bounds(t);
-        commands.entity(e).insert(BroadphaseAabb {
-            mins: bounds.mins,
-            maxs: bounds.maxs,
-        });
-    }
-}
-
-pub fn update_broadphase_array(
-    mut query: Query<(&Transform, &Body, &mut BroadphaseAabb)>,
-) {
-    // TODO: This is a bit of a hack, to track changes
-    for (trans, body, mut aabb) in query.iter_mut() {
-        let bounds = body.collider.bounds(trans);
-        aabb.mins = bounds.mins;
-        aabb.maxs = bounds.maxs;
-    }
-}
-
+// Array based sort and sweep algorithm
+// from Real-Time Collision Dection - Christer Ericon page 336
 pub fn broadphase_system_array(
     mut broad: Local<usize>,
     mut contact_maybies: EventWriter<ContactMaybe>,
     query: Query<(Entity, &BroadphaseAabb)>,
-
 ) {
     // TODO: Yes, we are copying the array out here, only way to sort it
-    // Ideally we would keep the array around, it should useally already near sorted
-    // but this is still far faster than the naive broadphase
-    //let t0 = Instant::now();
+    // Ideally we would keep the array around, it should already near sorted
+    // but this is still far faster than my first broadphase
+    let t0 = Instant::now();
     let mut list = query.iter().collect::<Vec<_>>();
     let sort_axis = broad.to_owned();
 
+    let t1 = Instant::now();
+
     // Sort the array on currently selected sorting axis
+    // TODO: par_sort really helps
     list.sort_unstable_by(|(_, a), (_, b)| {
         // Sort on minimum value along either x, y, or z axis
         let min_a = a.mins[sort_axis];
@@ -166,13 +143,13 @@ pub fn broadphase_system_array(
         std::cmp::Ordering::Equal
     });
 
-    //let t1= Instant::now();
+    let t2 = Instant::now();
     // Sweep the array for collisions
     let mut s = [0.0f32; 3];
     let mut s2 = [0.0f32; 3];
     let mut v = [0.0f32; 3];
 
-    for (i, (a, aabb_a )) in list.iter().enumerate() {
+    for (i, (a, aabb_a)) in list.iter().enumerate() {
         // Determine AABB center point
         let p = 0.5 * (aabb_a.mins + aabb_a.maxs);
 
@@ -182,16 +159,14 @@ pub fn broadphase_system_array(
             s2[c] += p[c] * p[c];
         }
         // Test collisions against all possible overlapping AABBs following current one
-        for  (b, aabb_b) in list.iter().skip(i + 1) { // todo: + 1 may be wrong
+        for (b, aabb_b) in list.iter().skip(i + 1) {
+            // todo: + 1 may be wrong
             // Stop when tested AABBs are beyond the end of current AABB
             if aabb_b.mins[sort_axis] > aabb_a.maxs[sort_axis] {
                 break;
             }
-            if aabb_aabb_overlap(aabb_a, aabb_b) {
-                contact_maybies.send(ContactMaybe {
-                    a: *a,
-                    b: *b,
-                });
+            if aabb_aabb_interect(aabb_a, aabb_b) {
+                contact_maybies.send(ContactMaybe { a: *a, b: *b });
             }
         }
     }
@@ -210,8 +185,36 @@ pub fn broadphase_system_array(
         *broad = 2;
     }
 
-    //let t2 = Instant::now();
-    //println!("Broadphase: sort - {:?}, sweep - {:?}", t1.duration_since(t0), t2.duration_since(t1));
+    let t3 = Instant::now();
+    println!(
+        "Broadphase: total - {:?}, copy: {:?}, sort - {:?}, sweep - {:?}",
+        t3.duration_since(t0),
+        t1.duration_since(t0),
+        t2.duration_since(t1),
+        t3.duration_since(t2)
+    );
+}
+
+pub fn add_broadphase_aabb(
+    mut commands: Commands,
+    query: Query<(Entity, &Transform, &Body), Added<Body>>,
+) {
+    for (e, t, b) in query.iter() {
+        let bounds = b.collider.bounds(t);
+        commands.entity(e).insert(BroadphaseAabb {
+            mins: bounds.mins,
+            maxs: bounds.maxs,
+        });
+    }
+}
+
+pub fn update_broadphase_array(mut query: Query<(&Transform, &Body, &mut BroadphaseAabb)>) {
+    // TODO: This is a bit of a hack, to track changes
+    for (trans, body, mut aabb) in query.iter_mut() {
+        let bounds = body.collider.bounds(trans);
+        aabb.mins = bounds.mins;
+        aabb.maxs = bounds.maxs;
+    }
 }
 
 #[derive(Component)]
@@ -223,7 +226,8 @@ pub struct BroadphaseAabb {
 // Separating Axis Test
 // If there is no overlap on a particular axis,
 // then the two AABBs do not intersect
-fn aabb_aabb_overlap(a: &BroadphaseAabb, b: &BroadphaseAabb) -> bool {
+#[inline]
+fn aabb_aabb_interect(a: &BroadphaseAabb, b: &BroadphaseAabb) -> bool {
     if a.mins.x >= b.maxs.x {
         return false;
     }

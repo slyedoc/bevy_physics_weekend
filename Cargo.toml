@@ -21,6 +21,7 @@ bevy = { version = "0.6.0", default-features = false, features = [
 ] }
 bevy-inspector-egui = { version = "0.7.1" }
 bevy_polyline = "0.1"
+rayon = "1.5.1"
 
 [dev-dependencies]
 bevy = { version = "0.6.0", default-features = true }

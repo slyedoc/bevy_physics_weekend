@@ -55,26 +55,26 @@ fn setup_level(
                 .insert(Name::new("Sphere"));
         }
 
-        // let shape_box = shape::Box::new(1.0, 1.0, 1.0);
-        // commands
-        //     .spawn_bundle(PbrBundle {
-        //         transform: Transform::from_xyz(0.0, 2.0, -5.0),
-        //         mesh: meshes.add(shape_box.into()),
-        //         material: materials.add(StandardMaterial {
-        //             base_color: Color::RED,
-        //             ..Default::default()
-        //         }),
-        //         ..Default::default()
-        //     })
-        //     .insert(Body {
-        //         collider: Collider::from(shape_box),
-        //         inv_mass: 1.0,
-        //         elasticity: 1.0,
-        //         friction: 0.5,
-        //         ..Default::default()
-        //     })
-        //     .insert(helper::Reset)
-        //     .insert(Name::new("Sphere"));
+        let shape_box = shape::Box::new(1.0, 1.0, 1.0);
+        commands
+            .spawn_bundle(PbrBundle {
+                transform: Transform::from_xyz(0.0, 2.0, -5.0),
+                mesh: meshes.add(shape_box.into()),
+                material: materials.add(StandardMaterial {
+                    base_color: Color::RED,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            })
+            .insert(Body {
+                collider: shape_box.into(),
+                inv_mass: 1.0,
+                elasticity: 1.0,
+                friction: 0.5,
+                ..Default::default()
+            })
+            .insert(helper::Reset)
+            .insert(Name::new("Box"));
     }
 }
 

@@ -25,7 +25,8 @@ impl Default for Collider {
 
 #[derive(Copy, Clone, Debug)]
 pub enum ShapeType {
-    Sphere{ radius: f32 },
+    Sphere { radius: f32 },
+    Plane { point: Vec3 },
     Box,
     Convex,
 }
@@ -41,6 +42,7 @@ impl Collider {
                 mins: self.bounds.mins + transform.translation,
                 maxs: self.bounds.maxs + transform.translation,
             },
+            ShapeType::Plane { point: _ } => todo!(),
             ShapeType::Convex => todo!(),
         }
     }
@@ -66,6 +68,7 @@ impl Collider {
                 max_pt + norm
             }
             ShapeType::Convex => todo!(),
+            ShapeType::Plane { point: _ } => todo!(),
         }
     }
     pub fn fastest_linear_speed(&self, angular_velocity: Vec3, dir: Vec3) -> f32 {
@@ -84,6 +87,7 @@ impl Collider {
                 max_speed
             },
             ShapeType::Convex => todo!(),
+            ShapeType::Plane { point } => todo!(),
         }
     }
 }
