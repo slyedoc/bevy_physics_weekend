@@ -150,6 +150,18 @@ impl ColliderBox {
             inertia_tensor: tensor + pat_tensor,
         }
     }
+
+    pub fn new_xyz(x_length: f32, y_length: f32, z_length: f32) -> Self {
+        ColliderBox::new(
+            x_length / 2.0,
+            -x_length / 2.0,
+            y_length / 2.0,
+            -y_length / 2.0,
+            z_length / 2.0,
+            -z_length / 2.0,
+        )
+    }
+
 }
 
 impl Collider for ColliderBox {

@@ -34,49 +34,7 @@ fn setup_level(
         info!("Reset");
 
         // Setup level
-        let mesh = stack_config.get_mesh(&mut meshes);
-
-        let b2 = stack_config.base_size * stack_config.base_size;
-        let mut pos = Vec3::new(0.0, stack_config.start_height, 0.0);
-        for i in 0..stack_config.count {
-            if i % stack_config.base_size == 0 {
-                pos.x = 0.0;
-                pos.z += stack_config.grid_offset;
-            } else {
-                pos.x += stack_config.grid_offset;
-            }
-            if i % b2 == 0 {
-                pos.x = 0.0;
-                pos.z = 0.0;
-                pos.y += stack_config.grid_offset;
-            }
-
-            let e = commands
-                .spawn_bundle(PbrBundle {
-                    transform: Transform::from_translation(pos),
-                    mesh: mesh.clone(),
-                    material: stack_config.ball_material.clone(),
-                    ..Default::default()
-                })
-                .insert(Body {
-                    inv_mass: 1.0,
-                    elasticity: 0.9,
-                    friction: 0.5,
-                    ..Default::default()
-                })
-                .insert(helper::Reset)
-                .insert(Name::new("Stack Item"))
-                .id();
-
-            match stack_config.stack_item {
-                helper::StackItem::Box { size } => {
-                    commands.entity(e).insert(ColliderBox::from(size))
-                }
-                helper::StackItem::Sphere { radius, .. } => {
-                    commands.entity(e).insert(ColliderSphere::new(radius))
-                }
-            };
-        }
+        stack_config.spawn(&mut commands, &mut meshes, helper::Engine::Crate);
     }
 }
 /// set up a simple 3D scene

@@ -1,7 +1,7 @@
 mod helper;
 use bevy::prelude::*;
 use bevy_inspector_egui::InspectorPlugin;
-use bevy_physics_weekend::{ PhysicsConfig, PhysicsPlugin, primitives::{Body, ColliderSphere, Collider, ColliderBox}};
+use bevy_physics_weekend::{ PhysicsConfig, PhysicsPlugin, primitives::{Body, ColliderSphere, ColliderBox}};
 
 fn main() {
     App::new()

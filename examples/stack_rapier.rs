@@ -30,55 +30,7 @@ fn setup_level(
 ) {
     for _ in ev_reset.iter() {
         info!("Reset");
-
-        let mesh = stack_config.get_mesh(&mut meshes);
-
-        let b2 = stack_config.base_size * stack_config.base_size;
-        let mut pos = Vec3::new(0.0, stack_config.start_height, 0.0);
-        for i in 0..stack_config.count {
-            if i % stack_config.base_size == 0 {
-                pos.x = 0.0;
-                pos.z += stack_config.grid_offset;
-            } else {
-                pos.x += stack_config.grid_offset;
-            }
-            if i % b2 == 0 {
-                pos.x = 0.0;
-                pos.z = 0.0;
-                pos.y += stack_config.grid_offset;
-            }
-
-            commands
-                .spawn_bundle(PbrBundle {
-                    transform: Transform::from_translation(pos),
-                    mesh: mesh.clone(),
-                    material: stack_config.ball_material.clone(),
-                    ..Default::default()
-                })
-                .insert_bundle(RigidBodyBundle {
-                    position: pos.into(),
-                    // TODO: Remove this, a small velocity so its not a stable stack
-                    velocity: RigidBodyVelocity {
-                        linvel: Vec3::new(0.1, 0.0, 0.0).into(),
-                        angvel: Vec3::new(0.1, 0.0, 0.0).into(),
-                    }
-                    .into(),
-                    ..Default::default()
-                })
-                .insert_bundle(ColliderBundle {
-                    shape: match stack_config.stack_item {
-                        StackItem::Sphere { radius, .. } => ColliderShape::ball(radius).into(),
-                        StackItem::Box { size } => {
-                            ColliderShape::cuboid(size.x / 2.0, size.y / 2.0, size.z / 2.0).into()
-                        }
-                    },
-                    ..ColliderBundle::default()
-                })
-                //.insert(ColliderDebugRender::with_id(0))
-                .insert(ColliderPositionSync::Discrete)
-                .insert(helper::Reset)
-                .insert(Name::new("Stack Item"));
-        }
+        stack_config.spawn(&mut commands, &mut meshes, helper::Engine::Rapier);
     }
 }
 
@@ -102,8 +54,8 @@ fn setup(
     /*
      * Ground
      */
-    let ground_size = 200.1;
-    let ground_height = 0.1;
+    let ground_size = 200.0;
+    let ground_height = 10.0;
     let ground_pos = Vec3::new(0.0, -ground_height, 0.0);
     commands
         .spawn()
@@ -113,7 +65,7 @@ fn setup(
                 min_x: -ground_size,
                 max_x: ground_size,
                 min_y: -ground_height,
-                max_y: ground_height,
+                max_y: 0.0,
                 min_z: -ground_size,
                 max_z: ground_size,
             })),
