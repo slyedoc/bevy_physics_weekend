@@ -65,7 +65,7 @@ fn setup(
                 min_x: -ground_size,
                 max_x: ground_size,
                 min_y: -ground_height,
-                max_y: 0.0,
+                max_y: ground_height,
                 min_z: -ground_size,
                 max_z: ground_size,
             })),
