@@ -1,5 +1,4 @@
 
-use crate::colliders::*;
 use bevy::prelude::*;
 
 #[derive(Component, Clone)]
@@ -7,10 +6,14 @@ pub struct Body {
     pub linear_velocity: Vec3,
     pub angular_velocity: Vec3,
     pub inv_mass: f32,
-    pub collider: Collider,
     pub elasticity: f32, // min = 0.0, max = 1.0
     pub friction: f32, // min = 0.0, max = 1.0
+
+    // will be set by collider
+    pub center_of_mass: Vec3,
+    pub inertia_tensor: Mat3,
 }
+
 
 impl Default for Body {
     fn default() -> Self {
@@ -18,9 +21,10 @@ impl Default for Body {
             linear_velocity: Vec3::default(),
             angular_velocity: Vec3::default(),
             inv_mass: 1.0,
-            collider: Collider::default() ,
             elasticity: 0.5,
             friction: 0.5,
+            center_of_mass: Vec3::default(),
+            inertia_tensor: Mat3::default(),
         }
     }
 }
@@ -30,31 +34,31 @@ impl Body {
         self.inv_mass == 0.0
     }
 
-    pub fn centre_of_mass_world(&self, t: &Transform) -> Vec3 {
-        t.translation + t.rotation * self.collider.center_of_mass
+    pub fn centre_of_mass_world(&self, t: &GlobalTransform) -> Vec3 {
+        t.translation + t.rotation * self.center_of_mass
     }
 
-    pub fn world_to_local(&self, t: &Transform, world_point: Vec3) -> Vec3 {
+    pub fn world_to_local(&self, t: &GlobalTransform, world_point: Vec3) -> Vec3 {
         let tmp = world_point - self.centre_of_mass_world(t);
         let inv_orientation = t.rotation.conjugate();
         inv_orientation * tmp
     }
 
-    pub fn local_to_world(&self, t: &Transform, body_point: Vec3) -> Vec3 {
+    pub fn local_to_world(&self, t: &GlobalTransform, body_point: Vec3) -> Vec3 {
         self.centre_of_mass_world(t) + t.rotation * body_point
     }
 
     pub fn inv_inertia_tensor_local(&self) -> Mat3 {
-        self.collider.inertia_tensor.inverse() * self.inv_mass
+        self.inertia_tensor.inverse() * self.inv_mass
     }
 
-    pub fn inv_inertia_tensor_world(&self, t: &Transform) -> Mat3 {
+    pub fn inv_inertia_tensor_world(&self, t: &GlobalTransform) -> Mat3 {
         let inv_inertia_tensor = self.inv_inertia_tensor_local();
         let orientation = Mat3::from_quat(t.rotation);
         orientation * inv_inertia_tensor * orientation.transpose()
     }
 
-    pub fn apply_impulse(&mut self, impulse_point: Vec3, impulse: Vec3, t: &mut Transform) {
+    pub fn apply_impulse(&mut self, impulse_point: Vec3, impulse: Vec3, t: &GlobalTransform) {
         if self.inv_mass == 0.0 {
             return;
         }
@@ -77,7 +81,7 @@ impl Body {
         // => dv = J / m
         self.linear_velocity += impulse * self.inv_mass;
     }
-    pub fn apply_impulse_angular(&mut self, impulse: Vec3, t: &Transform) {
+    pub fn apply_impulse_angular(&mut self, impulse: Vec3, t: &GlobalTransform) {
         if self.inv_mass == 0.0 {
             return;
         }
@@ -95,7 +99,7 @@ impl Body {
         }
     }
 
-    pub fn update(&mut self, transform: &mut Transform, dt: f32) {
+    pub fn update(&mut self, transform: &mut GlobalTransform, dt: f32) {
         // apply linear velocity
         transform.translation += self.linear_velocity * dt;
 
@@ -111,7 +115,7 @@ impl Body {
         // T = Ia = w x I * w
         // a = I^-1 (w x I * w)
         let orientation = Mat3::from_quat(transform.rotation);
-        let inertia_tensor = orientation * self.collider.inertia_tensor * orientation.transpose();
+        let inertia_tensor = orientation * self.inertia_tensor * orientation.transpose();
         let alpha = inertia_tensor.inverse()
             * (self
                 .angular_velocity
@@ -136,9 +140,9 @@ impl Body {
     /// The old way use to move the transform to find local collision point at time of impact,
     /// then role it back by running it with -time, required mutablity and required running the update logic twice
     /// This removes that and simulates moving the transform
-    /// Hate coping this much logic
     /// return translation and local collision point for time of impact
-    pub fn local_collision_point(&self, transform: &Transform, toi: f32, world_point: Vec3) -> (Vec3, Vec3) {
+    // TODO: Hate coping this much logic
+    pub fn local_collision_point(&self, transform: &GlobalTransform, toi: f32, world_point: Vec3) -> (Vec3, Vec3) {
 
          let mut tmp = transform.to_owned();
 
@@ -159,7 +163,7 @@ impl Body {
          // T = Ia = w x I * w
          // a = I^-1 (w x I * w)
          let orientation = Mat3::from_quat(tmp.rotation);
-         let inertia_tensor = orientation * self.collider.inertia_tensor * orientation.transpose();
+         let inertia_tensor = orientation * self.inertia_tensor * orientation.transpose();
          let alpha = inertia_tensor.inverse()
              * (self
                  .angular_velocity

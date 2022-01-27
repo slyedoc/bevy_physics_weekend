@@ -1,14 +1,14 @@
-use crate::PhysicsTime;
-use crate::{body::Body, contact::Contact};
+use crate::{primitives::*, PhysicsTime};
 
 use bevy::prelude::*;
 
 pub fn resolve_contact_system(
     pt: Res<PhysicsTime>,
-    mut query: Query<(&mut Body, &mut Transform)>,
+    mut query: Query<(&mut Body, &mut GlobalTransform)>,
     mut contacts: EventReader<Contact>,
 ) {
-      for contact in contacts.iter() {
+    // Resolve contacts
+    for contact in contacts.iter() {
         unsafe {
             let a = query.get_unchecked(contact.entity_a);
             let b = query.get_unchecked(contact.entity_b);
@@ -29,66 +29,18 @@ pub fn resolve_contact_system(
         }
     }
 
-    //position update
+    // Apply ballistic impulses
     for (mut body, mut transform) in query.iter_mut() {
         body.update(&mut transform, pt.time)
     }
 }
 
-fn resolve_contact_system_book(
-    //mut contacts: EventReader<Contact>,
-    //mut query: Query<(Entity, &mut Body, &mut Transform)>,
-) {
-            // sort the times of impact from earliest to latest
-    // contacts.sort_unstable_by(|a, b| {
-    //     if a.time_of_impact < b.time_of_impact {
-    //         std::cmp::Ordering::Less
-    //     } else if a.time_of_impact == b.time_of_impact {
-    //         std::cmp::Ordering::Equal
-    //     } else {
-    //         std::cmp::Ordering::Greater
-    //     }
-    // });
-
-    // // Apply Ballistic impulses
-    // let mut accumulated_time = 0.0;
-    // for contact in contacts.iter() {
-    //     let contact_time = contact.time_of_impact - accumulated_time;
-
-    //     //position update
-    //     for (_, mut body, mut transform) in query.iter_mut() {
-    //         body.update(&mut transform, contact_time)
-    //     }
-
-    //     unsafe {
-    //         let (_, mut body_a, mut transform_a) = query.get_unchecked(contact.entity_a).unwrap();
-    //         let (_, mut body_b, mut transform_b) = query.get_unchecked(contact.entity_b).unwrap();
-    //         resolve_contact(
-    //             contact,
-    //             &mut body_a,
-    //             &mut transform_a,
-    //             &mut body_b,
-    //             &mut transform_b,
-    //         );
-    //     }
-    //     accumulated_time += contact_time;
-    // }
-
-    // //update positions for the rest of this frame's time
-    // let time_remaining = pt.time - accumulated_time;
-    // if time_remaining > 0.0 {
-    //     for (_, mut body, mut transform) in query.iter_mut() {
-    //         body.update(&mut transform, time_remaining)
-    //     }
-    // }
-}
-
 fn resolve_contact(
     contact: &Contact,
     body_a: &mut Body,
-    transform_a: &mut Transform,
+    transform_a: &mut GlobalTransform,
     body_b: &mut Body,
-    transform_b: &mut Transform,
+    transform_b: &mut GlobalTransform,
 ) {
     let elasticity = body_a.elasticity * body_b.elasticity;
     let total_inv_mass = body_a.inv_mass + body_b.inv_mass;
@@ -156,5 +108,55 @@ fn resolve_contact(
 
         transform_a.translation += direction * a_move_weight;
         transform_b.translation -= direction * b_move_weight;
+    }
+}
+
+#[cfg(feature = "dynamic")]
+// This is from the book, and while i do want to make it an option, this implementation is to costly
+fn resolve_contact_system_dynmic(
+    mut contacts: EventReader<Contact>,
+    mut query: Query<(Entity, &mut Body, &mut Transform)>,
+) {
+    // sort the times of impact from earliest to latest
+    contacts.sort_unstable_by(|a, b| {
+        if a.time_of_impact < b.time_of_impact {
+            std::cmp::Ordering::Less
+        } else if a.time_of_impact == b.time_of_impact {
+            std::cmp::Ordering::Equal
+        } else {
+            std::cmp::Ordering::Greater
+        }
+    });
+
+    // Apply Ballistic impulses
+    // let mut accumulated_time = 0.0;
+    for contact in contacts.iter() {
+        let contact_time = contact.time_of_impact - accumulated_time;
+
+        //position update
+        for (_, mut body, mut transform) in query.iter_mut() {
+            body.update(&mut transform, contact_time)
+        }
+
+        unsafe {
+            let (_, mut body_a, mut transform_a) = query.get_unchecked(contact.entity_a).unwrap();
+            let (_, mut body_b, mut transform_b) = query.get_unchecked(contact.entity_b).unwrap();
+            resolve_contact(
+                contact,
+                &mut body_a,
+                &mut transform_a,
+                &mut body_b,
+                &mut transform_b,
+            );
+        }
+        accumulated_time += contact_time;
+    }
+
+    //update positions for the rest of this frame's time
+    let time_remaining = pt.time - accumulated_time;
+    if time_remaining > 0.0 {
+        for (_, mut body, mut transform) in query.iter_mut() {
+            body.update(&mut transform, time_remaining)
+        }
     }
 }

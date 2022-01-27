@@ -1,7 +1,6 @@
 /// Rapier Example
 mod helper;
 use bevy::prelude::*;
-use bevy_inspector_egui::InspectorPlugin;
 use bevy_rapier3d::prelude::*;
 use helper::*;
 
@@ -15,11 +14,10 @@ fn main() {
         })
         .add_plugins(DefaultPlugins)
         .add_plugins(HelperPlugins)
+        .add_plugin(helper::StackConfigPlugin)
         // Rapier
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         //.add_plugin(RapierRenderPlugin)
-        .add_plugin(InspectorPlugin::<BallStackConfig>::new())
-        .add_system(helper::ball_stack::ball_count_system)
         .add_startup_system(setup)
         .add_system(setup_level)
         .run();
@@ -29,17 +27,12 @@ fn setup_level(
     mut ev_reset: EventReader<helper::ResetEvent>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    stack_config: Res<helper::BallStackConfig>,
+    stack_config: Res<helper::StackConfig>,
 ) {
     for _ in ev_reset.iter() {
         info!("Reset");
 
-        // spheres stack
-        let mesh = meshes.add(Mesh::from(bevy::render::mesh::shape::UVSphere {
-            radius: stack_config.ball_radius,
-            sectors: stack_config.ball_sectors,
-            stacks: stack_config.ball_stacks,
-        }));
+        let mesh = stack_config.get_mesh(&mut meshes);
 
         let b2 = stack_config.base_size * stack_config.base_size;
         let mut pos = Vec3::new(0.0, stack_config.start_height, 0.0);
@@ -74,13 +67,18 @@ fn setup_level(
                     ..Default::default()
                 })
                 .insert_bundle(ColliderBundle {
-                    shape: ColliderShape::ball(stack_config.ball_radius).into(),
+                    shape: match stack_config.stack_item {
+                        StackItem::Sphere { radius, .. } => ColliderShape::ball(radius).into(),
+                        StackItem::Box { size } => {
+                            ColliderShape::cuboid(size.x / 2.0, size.y / 2.0, size.z / 2.0).into()
+                        }
+                    },
                     ..ColliderBundle::default()
                 })
                 //.insert(ColliderDebugRender::with_id(0))
                 .insert(ColliderPositionSync::Discrete)
                 .insert(helper::Reset)
-                .insert(Name::new("Ball"));
+                .insert(Name::new("Stack Item"));
         }
     }
 }

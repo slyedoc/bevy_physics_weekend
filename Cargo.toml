@@ -6,14 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["dynamic"]
+default = ["static"]
 static = []
 dynamic = []
 trace = [
     "bevy/trace_chrome"
 ]
-a = []
-b = []
 
 [dependencies]
 bevy = { version = "0.6.0", default-features = false, features = [

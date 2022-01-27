@@ -1,7 +1,7 @@
 mod helper;
 use bevy::prelude::*;
 use bevy_inspector_egui::InspectorPlugin;
-use bevy_physics_weekend::prelude::*;
+use bevy_physics_weekend::{primitives::*, PhysicsConfig, PhysicsPlugin};
 
 fn main() {
     App::new()
@@ -11,16 +11,14 @@ fn main() {
             ..Default::default()
         })
         .add_plugins(DefaultPlugins)
+        .add_plugins(helper::HelperPlugins)
+        .add_plugin(helper::StackConfigPlugin)
 
         // our plugin
         .add_plugin(PhysicsPlugin)
-
+        
         // Custom helpers
-        .add_plugins(helper::HelperPlugins)
         .add_plugin(InspectorPlugin::<PhysicsConfig>::new())
-        .add_plugin(InspectorPlugin::<helper::BallStackConfig>::new())
-        .add_system(helper::ball_stack::ball_count_system)
-
         .add_startup_system(setup)
         .add_system(setup_level)
         .run();
@@ -30,17 +28,13 @@ fn setup_level(
     mut ev_reset: EventReader<helper::ResetEvent>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    stack_config: Res<helper::BallStackConfig>,
+    stack_config: Res<helper::StackConfig>,
 ) {
     for _ in ev_reset.iter() {
         info!("Reset");
 
         // Setup level
-        let mesh = meshes.add(Mesh::from(shape::UVSphere {
-            radius: stack_config.ball_radius,
-            sectors: stack_config.ball_sectors,
-            stacks: stack_config.ball_stacks,
-        }));
+        let mesh = stack_config.get_mesh(&mut meshes);
 
         let b2 = stack_config.base_size * stack_config.base_size;
         let mut pos = Vec3::new(0.0, stack_config.start_height, 0.0);
@@ -57,7 +51,7 @@ fn setup_level(
                 pos.y += stack_config.grid_offset;
             }
 
-            commands
+            let e = commands
                 .spawn_bundle(PbrBundle {
                     transform: Transform::from_translation(pos),
                     mesh: mesh.clone(),
@@ -65,14 +59,23 @@ fn setup_level(
                     ..Default::default()
                 })
                 .insert(Body {
-                    collider: Collider::from(Sphere { radius: stack_config.ball_radius }),
                     inv_mass: 1.0,
-                    elasticity: 1.0,
+                    elasticity: 0.9,
                     friction: 0.5,
                     ..Default::default()
                 })
                 .insert(helper::Reset)
-                .insert(Name::new("Ball"));
+                .insert(Name::new("Stack Item"))
+                .id();
+
+            match stack_config.stack_item {
+                helper::StackItem::Box { size } => {
+                    commands.entity(e).insert(ColliderBox::from(size))
+                }
+                helper::StackItem::Sphere { radius, .. } => {
+                    commands.entity(e).insert(ColliderSphere::new(radius))
+                }
+            };
         }
     }
 }
@@ -112,12 +115,10 @@ fn setup(
         })
         .insert(Body {
             inv_mass: 0.0,
-            collider: Collider::from(Sphere {
-                radius: ground_radius,
-            }),
             friction: 0.5,
             elasticity: 1.0,
             ..Default::default()
         })
+        .insert(ColliderSphere::new(ground_radius))
         .insert(Name::new("Ground"));
 }

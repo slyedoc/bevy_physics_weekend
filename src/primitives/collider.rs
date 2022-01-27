@@ -1,7 +1,262 @@
-use crate::bounds::Bounds;
-use bevy::math::{Mat3, Vec3};
+use bevy::{
+    math::{Mat3, Vec3},
+    prelude::{ Component, GlobalTransform, Transform},
+};
 
-use super::{Collider, ShapeType, Tri};
+use super::{aabb::Aabb};
+use crate::primitives::Bounds;
+
+
+pub trait Collider {
+    fn center_of_mass(&self) -> Vec3;
+    fn bounds(&self) -> Bounds;
+    fn aabb(&self, transform: &GlobalTransform) -> Aabb;
+    fn support(&self, dir: Vec3, transform: &GlobalTransform, bias: f32) -> Vec3;
+    fn fastest_linear_speed(&self, angular_velocity: Vec3, dir: Vec3) -> f32;
+    fn shape_type(&self) -> ColliderType;
+}
+
+#[derive(Component)]
+pub enum ColliderType {
+    Sphere,
+    Box,
+    Convex,
+}
+
+#[derive(Component)]
+pub struct ColliderSphere {
+    pub radius: f32,
+    bounds: Bounds,
+    center_of_mass: Vec3,
+    inertia_tensor: Mat3,
+}
+
+impl ColliderSphere {
+    pub fn new(radius: f32) -> Self {
+        Self {
+            radius,
+            bounds: Bounds {
+                mins: Vec3::new(-radius, -radius, -radius),
+                maxs: Vec3::new(radius, radius, radius),
+            },
+            center_of_mass: Vec3::new(0.0, 0.0, 0.0),
+            inertia_tensor: Mat3::from_diagonal(Vec3::splat(2.0 * radius * radius / 5.0)),
+        }
+    }
+}
+
+impl Collider for ColliderSphere {
+    fn center_of_mass(&self) -> Vec3 {
+        self.center_of_mass
+    }
+
+    fn bounds(&self) -> Bounds {
+        self.bounds
+    }
+
+    fn aabb(&self, trans: &GlobalTransform ) -> Aabb {
+        Aabb {
+            mins: self.bounds.mins + trans.translation,
+            maxs: self.bounds.maxs + trans.translation,
+        }
+    }
+
+    fn support(&self, dir: Vec3, transform: &GlobalTransform, bias: f32) -> Vec3 {
+        transform.translation + dir * (self.radius + bias)
+    }
+
+    fn fastest_linear_speed(&self, angular_velocity: Vec3, dir: Vec3) -> f32 {
+        0.0
+    }
+
+    fn shape_type(&self) -> ColliderType {
+        ColliderType::Sphere
+    }
+}
+
+#[derive(Component)]
+pub struct ColliderBox {
+    bounds: Bounds,
+    points: Vec<Vec3>,
+    center_of_mass: Vec3,
+    inertia_tensor: Mat3,
+}
+
+impl From<Vec3> for ColliderBox {
+    fn from(size: Vec3) -> Self {
+        ColliderBox::new(
+            size.x / 2.0,
+            -size.x / 2.0,
+            size.y / 2.0,
+            -size.y / 2.0,
+            size.z / 2.0,
+            -size.z / 2.0,
+        )
+    }
+}
+
+impl ColliderBox {
+    pub fn new(
+        max_x: f32,
+        min_x: f32,
+        max_y: f32,
+        min_y: f32,
+        max_z: f32,
+        min_z: f32,
+    ) -> Self {
+
+        let points = vec![
+            Vec3::new(min_x, max_y, min_z),
+            Vec3::new(max_x, max_y, min_z),
+            Vec3::new(min_x, max_y, max_z),
+            Vec3::new(max_x, max_y, max_z),
+            Vec3::new(min_x, min_y, min_z),
+            Vec3::new(max_x, min_y, min_z),
+            Vec3::new(min_x, min_y, max_z),
+            Vec3::new(max_x, min_y, max_z),
+        ];
+
+        let bounds = Bounds {
+            mins: Vec3::new(min_x, min_y, min_z),
+            maxs: Vec3::new(max_x, max_y, max_z),
+        };
+
+        // inertia tensor for box centered around zero
+        let d = bounds.maxs - bounds.mins;
+
+        let dd = d * d;
+        let diagonal = Vec3::new(dd.y + dd.z, dd.x + dd.z, dd.x + dd.y) / 12.0;
+        let tensor = Mat3::from_diagonal(diagonal);
+
+        // now we need to use the parallel axis theorem to get the ineria tensor for a box that is
+        // not centered around the origin
+
+        let center_of_mass = (bounds.maxs + bounds.mins) * 0.5;
+
+        // the displacement from the center of mass to the origin
+        let r = -center_of_mass;
+        let r2 = r.length_squared();
+
+        let pat_tensor = Mat3::from_cols(
+            Vec3::new(r2 - r.x * r.x, r.x * r.y, r.x * r.z),
+            Vec3::new(r.y * r.x, r2 - r.y * r.y, r.y * r.z),
+            Vec3::new(r.z * r.x, r.z * r.y, r2 - r.z * r.z),
+        );
+
+        Self {
+            points,
+            bounds,
+            center_of_mass,
+            inertia_tensor: tensor + pat_tensor,
+        }
+    }
+}
+
+impl Collider for ColliderBox {
+
+    fn center_of_mass(&self) -> Vec3 {
+        self.center_of_mass
+    }
+
+    fn bounds(&self) -> Bounds {
+        self.bounds
+    }
+
+    fn aabb(&self, transform: &GlobalTransform) -> Aabb {
+        Aabb {
+            mins: self.bounds.mins + transform.translation,
+            maxs: self.bounds.maxs + transform.translation,
+        }
+    }
+
+    // find the point in the furthest in direction
+    fn support(&self, dir: Vec3, trans: &GlobalTransform, bias: f32) -> Vec3 {
+        find_support_point(&self.points, dir, trans, bias)
+    }
+
+    fn fastest_linear_speed(&self, angular_velocity: Vec3, dir: Vec3) -> f32 {
+        let mut max_speed = 0.0;
+        for pt in &self.points {
+            let r = *pt - self.center_of_mass;
+            let linear_velocity = angular_velocity.cross(r);
+            let speed = dir.dot(linear_velocity);
+            if speed > max_speed {
+                max_speed = speed;
+            }
+        }
+        max_speed
+    }
+
+    fn shape_type(&self) -> ColliderType {
+        ColliderType::Box
+    }
+}
+
+
+fn find_support_point(points: &[Vec3], dir: Vec3, trans: &GlobalTransform, bias: f32) -> Vec3 {
+    // find the point in the furthest in direction
+    let mut max_pt = (trans.rotation * points[0]) + trans.translation;
+    let mut max_dist = dir.dot(max_pt);
+    for &pt in &points[1..] {
+        let pt = (trans.rotation * pt) + trans.translation;
+        let dist = dir.dot(pt);
+        if dist > max_dist {
+            max_dist = dist;
+            max_pt = pt;
+        }
+    }
+
+    let norm = dir.normalize() * bias;
+
+    max_pt + norm
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Tri {
+    pub a: u32,
+    pub b: u32,
+    pub c: u32,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Edge {
+    pub a: u32,
+    pub b: u32,
+}
+
+impl PartialEq for Edge {
+    fn eq(&self, other: &Self) -> bool {
+        (self.a == other.a && self.b == other.b) || (self.a == other.b && self.b == other.a)
+    }
+}
+
+impl Eq for Edge {}
+
+// This will compare the incoming edge with all the edges in the facing tris and then return true
+// if it's unique.
+fn is_edge_unique(tris: &[Tri], facing_tris: &[u32], ignore_tri: u32, edge: &Edge) -> bool {
+    for &tri_idx in facing_tris {
+        if ignore_tri == tri_idx {
+            continue;
+        }
+
+        let tri = tris[tri_idx as usize];
+
+        let edges = [
+            Edge { a: tri.a, b: tri.b },
+            Edge { a: tri.b, b: tri.c },
+            Edge { a: tri.c, b: tri.a },
+        ];
+
+        for e in &edges {
+            if *edge == *e {
+                return false;
+            }
+        }
+    }
+
+    true
+}
 
 #[derive(Clone, Debug)]
 pub struct Convex {
@@ -10,22 +265,7 @@ pub struct Convex {
     com: Vec3,
 }
 
-impl From<Convex> for Collider {
-    fn from(value: Convex) -> Self {
-        Collider {
-            center_of_mass: Vec3::ZERO,
-            inertia_tensor: Mat3::ZERO,
-            bounds: value.bounds,
-            points: vec![],
-            shape: ShapeType::Convex,
-        }
-    }
-}
-
-
-
 // TODO: There are a lot of C style loops that could be made idomatic in here.
-
 fn find_point_furthest_in_dir(pts: &[Vec3], dir: Vec3) -> usize {
     let mut max_idx = 0;
     let mut max_dist = dir.dot(pts[0]);
@@ -68,7 +308,7 @@ fn distance_from_triangle(a: Vec3, b: Vec3, c: Vec3, pt: Vec3) -> f32 {
     let normal = ab.cross(ac).normalize();
 
     let ray = pt - a;
-    
+
     ray.dot(normal)
 }
 
@@ -168,47 +408,6 @@ fn remove_internal_points(hull_points: &[Vec3], hull_tris: &[Tri], check_pts: &m
             i += 1;
         }
     }
-}
-
-#[derive(Copy, Clone, Debug)]
-struct Edge {
-    a: u32,
-    b: u32,
-}
-
-impl PartialEq for Edge {
-    fn eq(&self, other: &Self) -> bool {
-        (self.a == other.a && self.b == other.b) || (self.a == other.b && self.b == other.a)
-    }
-}
-
-impl Eq for Edge {}
-
-// This will compare the incoming edge with all the edges in the facing tris and then return true
-// if it's unique.
-fn is_edge_unique(tris: &[Tri], facing_tris: &[u32], ignore_tri: u32, edge: &Edge) -> bool {
-    for tri_idx in facing_tris {
-
-        if ignore_tri == *tri_idx {
-            continue;
-        }
-
-        let tri = tris[*tri_idx as usize];
-
-        let edges = [
-            Edge { a: tri.a, b: tri.b },
-            Edge { a: tri.b, b: tri.c },
-            Edge { a: tri.c, b: tri.a },
-        ];
-
-        for e in &edges {
-            if edge == e {
-                return false;
-            }
-        }
-    }
-
-    true
 }
 
 fn add_point(hull_points: &mut Vec<Vec3>, hull_tris: &mut Vec<Tri>, pt: Vec3) {
@@ -333,7 +532,6 @@ fn build_convex_hull(verts: &[Vec3], hull_points: &mut Vec<Vec3>, hull_tris: &mu
 
     expand_convex_hull(hull_points, hull_tris, verts);
 }
-
 
 fn is_external(pts: &[Vec3], tris: &[Tri], pt: Vec3) -> bool {
     for tri in tris {

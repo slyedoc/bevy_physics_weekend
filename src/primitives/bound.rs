@@ -1,9 +1,9 @@
 use std::ops::{Add, AddAssign};
 
-use bevy::math::Vec3;
-use bevy_inspector_egui::Inspectable;
+use bevy::prelude::*;
 
-#[derive(Inspectable, Copy, Clone, Debug, PartialEq)]
+/// A bounding volume.
+#[derive(Component, Copy, Clone, Debug, PartialEq)]
 pub struct Bounds {
     pub mins: Vec3,
     pub maxs: Vec3,

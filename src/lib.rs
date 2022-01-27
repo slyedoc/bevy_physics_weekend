@@ -3,32 +3,21 @@
 #![allow(clippy::too_many_arguments)]
 #![feature(vec_retain_mut)]
 
-mod body;
-mod bounds;
-mod broadphase;
-mod colliders;
-mod constraints;
-mod contact;
-mod debug_render;
-mod dynamics;
-mod gjk;
+pub mod constraints;
+pub mod debug_render;
 mod intersect;
-mod manifold;
 mod math;
-mod narrowphase;
-mod resolve_contact;
+mod phase;
+pub mod primitives;
+
+use primitives::*;
 
 use bevy::{ecs::schedule::ShouldRun, prelude::*};
 use bevy_inspector_egui::Inspectable;
+use phase::*;
 
 use bevy_polyline::*;
-use contact::{Contact, ContactBroad};
-pub mod prelude {
-    pub use crate::{
-        body::*, colliders::*, constraints::*, contact::*, debug_render::*, PhysicsConfig,
-        PhysicsPlugin,
-    };
-}
+
 
 #[derive(Component, Inspectable)]
 pub struct PhysicsConfig {
@@ -61,26 +50,32 @@ pub enum PhysicsSystem {
     First,
     Dynamics,
     Broadphase,
+    NarrowphaseBreakout,
     Narrowphase,
     ConstraintsPreSolve,
     ConstraintsSolve,
     ResolveContact,
 }
 
+
 pub struct PhysicsPlugin;
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<Contact>()
-            .add_event::<ContactBroad>()
+            .add_event::<BroadContact>()
+            .add_event::<BroadSphereSphere>()
+            .add_event::<BroadSphereBox>()
+            .add_event::<BroadBoxBox>()
             .add_system_set_to_stage(
                 CoreStage::PreUpdate,
                 SystemSet::new()
                     .with_run_criteria(run_physics)
                     .label(PhysicsSystem::First)
                     .with_system(timestep_system)
-                    .with_system(broadphase::update_broadphase_array)
-                    .with_system(broadphase::add_broadphase_aabb),
-                    //.with_system(manifold_remove_expired_system),
+                    .with_system(update_aabb::<primitives::ColliderSphere>)
+                    .with_system(update_aabb::<primitives::ColliderBox>)
+                    .with_system(collider_add_watch::<primitives::ColliderSphere>)
+                    .with_system(collider_add_watch::<primitives::ColliderBox>),
             )
             .add_system_set_to_stage(
                 CoreStage::PreUpdate,
@@ -98,25 +93,37 @@ impl Plugin for PhysicsPlugin {
                     .after(PhysicsSystem::Dynamics) // chaining
                     //.with_system(broadphase::broadphase_system)
                     //.with_system(broadphase::broadphase_system_aabb)
-                    .with_system(broadphase::broadphase_system_array),
+                    .with_system(broadphase::broadphase_system),
+            )
+            .add_system_set_to_stage(
+                CoreStage::PreUpdate,
+                SystemSet::new()
+                    .with_run_criteria(run_physics)
+                    .label(PhysicsSystem::NarrowphaseBreakout)
+                    .after(PhysicsSystem::Broadphase) // chaining
+                    //.with_system(narrowphase::narrowphase_system),
+                    .with_system(narrowphase::narrowphase_breakout_system),
             )
             .add_system_set_to_stage(
                 CoreStage::PreUpdate,
                 SystemSet::new()
                     .with_run_criteria(run_physics)
                     .label(PhysicsSystem::Narrowphase)
-                    .after(PhysicsSystem::Broadphase) // chaining
-                    //.with_system(narrowphase::narrowphase_system),
-                    .with_system(narrowphase::narrowphase_system_static),
+                    .after(PhysicsSystem::NarrowphaseBreakout) // chaining
+                    .with_system(narrowphase::narrow_phase_sphere_box)
+                    .with_system(narrowphase::narrow_phase_sphere_sphere),
             )
             .add_system_set_to_stage(
                 CoreStage::PreUpdate,
                 SystemSet::new()
                     .with_run_criteria(run_physics)
                     .label(PhysicsSystem::ResolveContact) // chaining
-                    .after(PhysicsSystem::Broadphase)
+                    .after(PhysicsSystem::Narrowphase)
                     .with_system(resolve_contact::resolve_contact_system),
             );
+
+        //.with_system(manifold_remove_expired_system),
+
         // .add_system_set(
         //     SystemSet::new()
         //         .with_run_criteria(run_physics)
@@ -151,6 +158,24 @@ impl Plugin for PhysicsPlugin {
         // Add resources
         app.init_resource::<PhysicsConfig>();
         app.init_resource::<PhysicsTime>();
+    }
+}
+
+pub fn collider_add_watch<T: Component + Collider>(mut commands: Commands, query: Query<(Entity, &GlobalTransform, &T), Added<T>>) {
+    for (e, trans, collider) in query.iter() {
+        commands.entity(e).insert(collider.aabb(trans));
+        commands.entity(e).insert(collider.shape_type());
+    }
+}
+
+pub fn update_aabb<T: Component + Collider>(
+    mut query: Query<(&GlobalTransform, &T, &mut Aabb)>,
+) {
+    for (trans, collider, mut aabb) in query.iter_mut() {
+        let new_aabb = collider.aabb(trans);
+        aabb.mins = new_aabb.mins;
+        aabb.maxs = new_aabb.maxs;
+
     }
 }
 

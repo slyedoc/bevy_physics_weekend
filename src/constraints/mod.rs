@@ -8,8 +8,9 @@
 pub mod constraint_penetration;
 
 use crate::{
-    body::Body,
+    
     math::{MatMN, VecN},
+    primitives::*,
     PhysicsConfig,
 };
 use bevy::prelude::*;
@@ -277,7 +278,7 @@ impl Default for ConstraintConfig {
 impl ConstraintConfig {
     fn get_inverse_mass_matrix(
         &self,
-        bodies: &mut Query<(&mut Body, &mut Transform)>,
+        bodies: &mut Query<(&mut Body, &mut GlobalTransform)>,
     ) -> MatMN<12, 12> {
         let mut inv_mass_matrix = MatMN::zero();
 
@@ -313,7 +314,7 @@ impl ConstraintConfig {
         inv_mass_matrix
     }
 
-    fn get_velocities(&self, bodies: &mut Query<(&mut Body, &mut Transform)>) -> VecN<12> {
+    fn get_velocities(&self, bodies: &mut Query<(&mut Body, &mut GlobalTransform)>) -> VecN<12> {
         let mut q_dt = VecN::zero();
 
         {
@@ -343,7 +344,7 @@ impl ConstraintConfig {
         q_dt
     }
 
-    fn apply_impulses(&self, bodies: &mut Query<(&mut Body, &mut Transform)>, impulses: VecN<12>) {
+    fn apply_impulses(&self, bodies: &mut Query<(&mut Body, &mut GlobalTransform)>, impulses: VecN<12>) {
         {
             let force_internal_a = Vec3::from_slice(&impulses[0..]);
             let torque_internal_a = Vec3::from_slice(&impulses[3..]);

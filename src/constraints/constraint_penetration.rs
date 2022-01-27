@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use super::ConstraintConfig;
 use crate::{
     math::{lcp_gauss_seidel, MatMN, MatN, VecN},
-    body::Body,
+    primitives::*,
     PhysicsTime,
 };
 
@@ -43,7 +43,7 @@ pub fn pre_solve_system(
     mut commands: Commands,
     pt: Res<PhysicsTime>,
     mut query: Query<(Entity, &mut ConstraintPenetration)>,
-    mut bodies: Query<(&mut Body, &mut Transform)>,
+    mut bodies: Query<(&mut Body, &mut GlobalTransform)>,
 ) {
     for (e, mut constraint) in query.iter_mut() {
         unsafe {
@@ -176,7 +176,7 @@ pub fn pre_solve_system(
 pub fn solve_system(
     mut commands: Commands,
     mut query: Query<(Entity, &mut ConstraintPenetration)>,
-    mut bodies: Query<(&mut Body, &mut Transform)>,
+    mut bodies: Query<(&mut Body, &mut GlobalTransform)>,
 ) {
     for (e, mut constraint) in query.iter_mut() {
         unsafe {

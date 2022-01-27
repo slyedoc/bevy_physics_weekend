@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{PhysicsConfig, body::Body, PhysicsTime};
+use crate::{PhysicsConfig, primitives::*, PhysicsTime};
 
 pub fn dynamics_gravity_system(
     config: Res<PhysicsConfig>,

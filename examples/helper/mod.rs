@@ -2,16 +2,17 @@ pub mod camera_controller;
 pub mod editor;
 pub mod fps;
 pub mod reset;
-pub mod ball_stack;
+pub mod stack_config;
 
 use bevy::{prelude::*, app::PluginGroupBuilder};
 use bevy_inspector_egui::InspectorPlugin;
-use bevy_physics_weekend::prelude::PhysicsReport;
+
+use bevy_physics_weekend::debug_render::PhysicsReport;
 pub use camera_controller::*;
 pub use editor::*;
 pub use fps::*;
 pub use reset::*;
-pub use ball_stack::*;
+pub use stack_config::*;
 
 pub struct HelperPlugins;
 

@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 use bevy::prelude::*;
-use crate::body::Body;
 use crate::math::glam_ext::Mat4Ext;
-use crate::colliders::{Tri, Edge};
+use crate::primitives::*;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 struct Point {
@@ -21,18 +20,18 @@ impl Point {
     }
 }
 
-pub fn gjk_does_intersect(body_a: &Body, transform_a: &Transform, body_b: &Body, transform_b: &Transform, bias: f32) -> Option<(Vec3, Vec3)> {
+pub fn gjk_does_intersect(collider_a: &dyn Collider, transform_a: &GlobalTransform, collider_b: &dyn Collider, transform_b: &GlobalTransform, bias: f32) -> Option<(Vec3, Vec3)> {
     const ORIGIN: Vec3 = Vec3::ZERO;
 
     let mut num_pts = 1;
     let mut simplex_points = [Point::new(); 4];
-    simplex_points[0] = support(body_a, transform_a, body_b, transform_b, Vec3::ONE, 0.0);
+    simplex_points[0] = support(collider_a, transform_a, collider_b, transform_b, Vec3::ONE, 0.0);
 
     let mut closest_dist = f32::MAX;
     let mut new_dir = -simplex_points[0].xyz;
     loop {
         // Get the new point to check on
-        let new_pt = support(body_a, transform_a, body_b, transform_b, new_dir, 0.0);
+        let new_pt = support(collider_a, transform_a, collider_b, transform_b, new_dir, 0.0);
         if simplex_has_point(&simplex_points, &new_pt) {
             break;
         }
@@ -71,7 +70,7 @@ pub fn gjk_does_intersect(body_a: &Body, transform_a: &Transform, body_b: &Body,
     // Check that we have a 3-simplex (EPA expects a tetrahedron)
     if num_pts == 1 {
         let search_dir = -simplex_points[0].xyz;
-        let new_pt = support(body_a, transform_a, body_b, transform_b, search_dir, 0.0);
+        let new_pt = support(collider_a, transform_a, collider_b, transform_b, search_dir, 0.0);
         simplex_points[num_pts] = new_pt;
         num_pts += 1;
     }
@@ -85,7 +84,7 @@ pub fn gjk_does_intersect(body_a: &Body, transform_a: &Transform, body_b: &Body,
         };
 
         let new_dir = u;
-        let new_pt = support(body_a, transform_a, body_b, transform_b, new_dir, 0.0);
+        let new_pt = support(collider_a, transform_a, collider_b, transform_b, new_dir, 0.0);
         simplex_points[num_pts] = new_pt;
         num_pts += 1;
     }
@@ -96,7 +95,7 @@ pub fn gjk_does_intersect(body_a: &Body, transform_a: &Transform, body_b: &Body,
         let norm = ab.cross(ac);
 
         let new_dir = norm;
-        let new_pt = support(body_a, transform_a, body_b,transform_b, new_dir, 0.0);
+        let new_pt = support(collider_a, transform_a, collider_b,transform_b, new_dir, 0.0);
         simplex_points[num_pts] = new_pt;
         num_pts += 1;
     }
@@ -119,24 +118,24 @@ pub fn gjk_does_intersect(body_a: &Body, transform_a: &Transform, body_b: &Body,
     }
 
     // Perform EPA expansion of the simplex to find the closest face on the CSO
-    Some(epa_expand(body_a, transform_a, body_b, transform_b, bias, &simplex_points))
+    Some(epa_expand(collider_a, transform_a, collider_b, transform_b, bias, &simplex_points))
 }
 
 
-pub fn gjk_closest_points(body_a: &Body, transform_a: &Transform, body_b: &Body, transform_b: &Transform) -> (Vec3, Vec3) {
+pub fn gjk_closest_points(collider_a: &dyn Collider, transform_a: &GlobalTransform, collider_b: &dyn Collider, transform_b: &GlobalTransform) -> (Vec3, Vec3) {
     let mut closest_dist = f32::MAX;
     const BIAS: f32 = 0.0;
 
     let mut num_pts = 1;
 
     let mut simplex_points = [Point::new(); 4];
-    simplex_points[0] = support(body_a, transform_a, body_b, transform_b, Vec3::ONE, BIAS);
+    simplex_points[0] = support(collider_a, transform_a, collider_b, transform_b, Vec3::ONE, BIAS);
 
     let mut lambdas = Vec4::new(1.0, 0.0, 0.0, 0.0);
     let mut new_dir = -simplex_points[0].xyz;
     loop {
         // get the new point to check on
-        let new_pt = support(body_a, transform_a, body_b, transform_b, new_dir, BIAS);
+        let new_pt = support(collider_a, transform_a, collider_b, transform_b, new_dir, BIAS);
 
         // if the new point is the same as the previous point then we can't expand any further
         if simplex_has_point(&simplex_points, &new_pt) {
@@ -351,19 +350,17 @@ fn signed_volume_3d(s1: Vec3, s2: Vec3, s3: Vec3, s4: Vec3) -> Vec4 {
     }
 }
 
-fn support(body_a: &Body, transform_a: &Transform, body_b: &Body, transform_b: &Transform, dir: Vec3, bias: f32) -> Point {
+fn support(collider_a: &dyn Collider, transform_a: &GlobalTransform, collider_b: &dyn Collider, transform_b: &GlobalTransform, dir: Vec3, bias: f32) -> Point {
     let dir = dir.normalize();
 
     // Find the point in A furthest direction
-    let pt_a = body_a
-        .collider
+    let pt_a = collider_a
         .support(dir, transform_a, bias);
 
     let dir = -dir;
 
     // Find the point in B furthest direction
-    let pt_b = body_b
-        .collider
+    let pt_b = collider_b
         .support(dir, transform_b, bias);
 
     // Return the point in the minkowski sum, furthest in the direction
@@ -468,10 +465,10 @@ fn num_valids(lambdas: &Vec4) -> usize {
 }
 
 fn epa_expand(
-    body_a: &Body,
-    transform_a: &Transform,
-    body_b: &Body,
-    transform_b: &Transform,
+    collider_a: &dyn Collider,
+    transform_a: &GlobalTransform,
+    collider_b: &dyn Collider,
+    transform_b: &GlobalTransform,
     bias: f32,
     simplex_points: &[Point; 4],
 ) -> (Vec3, Vec3) {
@@ -509,7 +506,7 @@ fn epa_expand(
         let tri = closest_triangle(&triangles, &points).unwrap();
         let normal = normal_direction(&tri, &points);
 
-        let new_pt = support(body_a, transform_a, body_b, transform_b, normal, bias);
+        let new_pt = support(collider_a, transform_a, collider_b, transform_b, normal, bias);
 
         // if w already exists then just stop because it means we can't expand any further
         if triangle_has_point(new_pt.xyz, &triangles, &points) {

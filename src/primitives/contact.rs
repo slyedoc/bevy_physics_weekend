@@ -14,18 +14,24 @@ pub struct Contact {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct ContactBroad {
+pub struct BroadContact {
     pub a: Entity,
     pub b: Entity,
 }
 
-impl PartialEq for ContactBroad {
+pub struct BroadSphereSphere(pub BroadContact);
+
+pub struct BroadSphereBox(pub BroadContact);
+pub struct BroadBoxBox(pub BroadContact);
+
+
+impl PartialEq for BroadContact {
     fn eq(&self, other: &Self) -> bool {
         (self.a == other.a && self.b == other.b) || (self.a == other.b && self.b == other.a)
     }
 }
 
-impl Eq for ContactBroad {}
+impl Eq for BroadContact {}
 
 #[derive(Copy, Clone, Debug)]
 pub struct PsuedoBody {
