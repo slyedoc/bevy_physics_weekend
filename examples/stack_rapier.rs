@@ -4,11 +4,10 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use helper::*;
 
-// TODO: Reset not working, see https://github.com/dimforge/bevy_rapier/issues/111
 fn main() {
     App::new()
         .insert_resource(WindowDescriptor {
-            title: "Rapier Ball Stack".to_string(),
+            title: "Rapier Stack".to_string(),
             vsync: false,
             ..Default::default()
         })
@@ -58,9 +57,9 @@ fn setup_level(
                 })
                 .insert_bundle(RigidBodyBundle {
                     position: pos.into(),
-                    // TODO: Remove this, a small impulse so its not a stable stack
+                    // TODO: Remove this, a small velocity so its not a stable stack
                     velocity: RigidBodyVelocity {
-                        linvel: Vec3::new(0.1, 0.0, 0.0).into(), // a little velocity to start a fall
+                        linvel: Vec3::new(0.1, 0.0, 0.0).into(),
                         angvel: Vec3::new(0.1, 0.0, 0.0).into(),
                     }
                     .into(),
