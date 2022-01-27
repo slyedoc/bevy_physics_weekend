@@ -32,7 +32,7 @@ This leads to needing to load data in and out every frame since rapier knows not
 Follow the `Install OS dependencies` at [bevy book](https://bevyengine.org/learn/book/getting-started/setup/).
 
 ```bash
-cargo run  --release --example ball_stack
+cargo run  --release --example stack
 ```
 
 If issues check the [Trouble shooting](./docs/troubleshooting.md) section.
