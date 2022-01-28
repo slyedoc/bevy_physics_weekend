@@ -28,6 +28,29 @@ pub struct StackConfig {
     pub ball_material: Handle<StandardMaterial>,
 }
 
+impl FromWorld for StackConfig {
+    fn from_world(world: &mut World) -> Self {
+        let world = world.cell();
+        let mut materials = world
+            .get_resource_mut::<Assets<StandardMaterial>>()
+            .unwrap();
+
+        let asset_server = world.get_resource_mut::<AssetServer>().unwrap();
+
+        Self {
+            shape: Shape::Sphere,
+            count: 5000,
+            base_size: 10,
+            grid_offset: 3.0,
+            ball_material: materials.add(StandardMaterial {
+                base_color_texture: Some(asset_server.load("checker_red.png")),
+                ..Default::default()
+            }),
+            start_height: 5.0,
+        }
+    }
+}
+
 #[derive(Inspectable)]
 pub enum Engine {
     Crate,
@@ -126,28 +149,7 @@ impl StackConfig {
     }
 }
 
-impl FromWorld for StackConfig {
-    fn from_world(world: &mut World) -> Self {
-        let world = world.cell();
-        let mut materials = world
-            .get_resource_mut::<Assets<StandardMaterial>>()
-            .unwrap();
 
-        let asset_server = world.get_resource_mut::<AssetServer>().unwrap();
-
-        Self {
-            shape: Shape::Sphere,
-            count: 1000,
-            base_size: 10,
-            grid_offset: 3.0,
-            ball_material: materials.add(StandardMaterial {
-                base_color_texture: Some(asset_server.load("checker_red.png")),
-                ..Default::default()
-            }),
-            start_height: 5.0,
-        }
-    }
-}
 
 #[allow(dead_code)]
 pub fn input_system(input: Res<Input<KeyCode>>, mut config: ResMut<StackConfig>) {

@@ -1,6 +1,6 @@
 use bevy::{
     math::{Mat3, Vec3},
-    prelude::{ Component, GlobalTransform, Transform},
+    prelude::{ Component, GlobalTransform},
 };
 
 use super::{aabb::Aabb};
@@ -65,7 +65,7 @@ impl Collider for ColliderSphere {
         transform.translation + dir * (self.radius + bias)
     }
 
-    fn fastest_linear_speed(&self, angular_velocity: Vec3, dir: Vec3) -> f32 {
+    fn fastest_linear_speed(&self, _angular_velocity: Vec3, _dir: Vec3) -> f32 {
         0.0
     }
 

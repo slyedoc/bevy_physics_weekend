@@ -3,15 +3,13 @@ use bevy::prelude::*;
 use crate::{intersect, primitives::*};
 
 pub fn narrowphase_breakout_system(
-    mut commands: Commands,
     mut broad_contacts: EventReader<BroadContact>,
     mut sphere_sphere: EventWriter<BroadSphereSphere>,
     mut sphere_box: EventWriter<BroadSphereBox>,
     mut box_box: EventWriter<BroadBoxBox>,
-    mut contacts: EventWriter<Contact>,
     bodies: Query<(&Body, &ColliderType)>,
 ) {
-    for pair in broad_contacts.iter() {
+    for pair in broad_contacts.iter(){
         //SAFETY: There is no way for a and b to the same entity
         //see https://github.com/bevyengine/bevy/issues/2042
         unsafe {
@@ -25,13 +23,11 @@ pub fn narrowphase_breakout_system(
             match (shape_a, shape_b) {
                 (ColliderType::Sphere, ColliderType::Sphere) => sphere_sphere.send(BroadSphereSphere(*pair)),
                 (ColliderType::Sphere, ColliderType::Box) => sphere_box.send(BroadSphereBox(*pair)),
-                
                 // swap order so we dont need more services
                 (ColliderType::Box, ColliderType::Sphere) => sphere_sphere.send(BroadSphereSphere(BroadContact {
                         a: pair.b,
                         b: pair.a,
                     })),
-                
                 (ColliderType::Box, ColliderType::Box) => box_box.send(BroadBoxBox(*pair)),
                 // (ShapeType::Box, ShapeType::Convex) => todo!(),
                 // (ShapeType::Convex, ShapeType::Sphere { radius }) => todo!(),
@@ -41,6 +37,38 @@ pub fn narrowphase_breakout_system(
         }
     }
 }
+
+
+// Separating Axis Test
+// If there is no overlap on a particular axis,
+// then the two AABBs do not intersect
+#[inline]
+fn aabb_aabb_interect(a: &Aabb, b: &Aabb) -> bool {
+    if a.mins.x >= b.maxs.x {
+        return false;
+    }
+    if a.maxs.x <= b.mins.x {
+        return false;
+    }
+
+    if a.mins.y >= b.maxs.y {
+        return false;
+    }
+    if a.maxs.y <= b.mins.y {
+        return false;
+    }
+
+    if a.mins.z >= b.maxs.z {
+        return false;
+    }
+    if a.maxs.z <= b.mins.z {
+        return false;
+    }
+
+    // Overlap on all three axes, so their intersection must be non-empty
+    true
+}
+
 
 pub fn narrow_phase_sphere_sphere(
     mut pairs: EventReader<BroadSphereSphere>,

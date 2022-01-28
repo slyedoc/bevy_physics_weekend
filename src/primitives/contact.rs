@@ -1,6 +1,6 @@
-use bevy::{math::Vec3, prelude::{Entity, Component}};
+use bevy::{math::Vec3, prelude::{Entity}};
 
-#[derive(Component, Copy, Clone, Debug)]
+#[derive( Copy, Clone, Debug)]
 pub struct Contact {
     pub entity_a: Entity,
     pub entity_b: Entity,

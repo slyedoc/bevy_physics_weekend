@@ -1,33 +1,38 @@
 use bevy::prelude::*;
+use bevy::tasks::*;
 
+use bevy::tasks::ParallelSlice;
 #[allow(unused_imports)]
 use bevy::utils::Instant;
-use rayon::prelude::*;
 
-use crate::{
-    
-    PhysicsTime, primitives::*,
-};
+use crate::primitives::*;
 
 // Playing around with a few different solutions here
-
 
 // Array based sort and sweep algorithm
 // from Real-Time Collision Dection - Christer Ericon page 336
 pub fn broadphase_system(
-    mut broad: Local<usize>,
-    mut contact_maybies: EventWriter<BroadContact>,
+    mut broad_contacts: EventWriter<BroadContact>,
     query: Query<(Entity, &Aabb)>,
+    mut sort_axis_local: Local<usize>,
+    mut possable_contacts_local: Local<Vec<BroadContact>>,
+    pool: Res<ComputeTaskPool>,
 ) {
+    #[cfg(feature = "timing")]
+    let t0 = Instant::now();
+
+    possable_contacts_local.clear();
+
     // TODO: Yes, we are copying the array out here, only way to sort it
     // Ideally we would keep the array around, it should already near sorted
     // but this is still far faster
     let mut list = query.iter().collect::<Vec<_>>();
-    let sort_axis = broad.to_owned();
+    let sort_axis = sort_axis_local.to_owned();
 
     // Sort the array on currently selected sorting axis
-    // PERF: par_sort helps but this is not where the time is spent
-    list.par_sort_unstable_by(|(_, a), (_, b)| {
+    // TODO: par_sort helps a little, but mostly so harmful on computer with less cores that its not worth it
+    // this is not where the time is spent
+    list.sort_unstable_by(|(_, a), (_, b)| {
         // Sort on minimum value along either x, y, or z axis
         let min_a = a.mins[sort_axis];
         let min_b = b.mins[sort_axis];
@@ -39,6 +44,8 @@ pub fn broadphase_system(
         }
         std::cmp::Ordering::Equal
     });
+    #[cfg(feature = "timing")]
+    let t1 = Instant::now();
 
     // Sweep the array for collisions
     // This is where 90% of the time is spent
@@ -62,9 +69,10 @@ pub fn broadphase_system(
             if aabb_b.mins[sort_axis] > aabb_a.maxs[sort_axis] {
                 break;
             }
-            if aabb_aabb_interect(aabb_a, aabb_b) {
-                contact_maybies.send(BroadContact { a: *a, b: *b });
-            }
+
+            // build up a list we need to do aabb collision detection on
+            possable_contacts_local.push(BroadContact { a: *a, b: *b });
+            //broad_contacts.send(BroadContact { a: *a, b: *b });
         }
     }
 
@@ -74,12 +82,53 @@ pub fn broadphase_system(
     }
 
     // Update axis sorted to be the one with greatest AABB variance
-    *broad = 0;
+    *sort_axis_local = 0;
     if v[1] > v[0] {
-        *broad = 1;
+        *sort_axis_local = 1;
     }
     if v[2] > v[sort_axis] {
-        *broad = 2;
+        *sort_axis_local = 2;
+    }
+
+    #[cfg(feature = "timing")]
+    let t2 = Instant::now();
+
+    // filtter possable contacts
+    // We still have far to many contacts, filter them by doing aabb collision detection    
+    let final_contacts = possable_contacts_local
+        .par_chunk_map(&pool, 10000, |chunk| {
+            let mut results = Vec::new();
+            for c in chunk {
+                unsafe {
+                    let (_, aabb_a) = query.get_unchecked(c.a).unwrap();
+                    let (_, aabb_b) = query.get_unchecked(c.b).unwrap();
+                    if aabb_aabb_intersect(aabb_a, aabb_b) {
+                        results.push(*c);
+                    }
+                }
+            }
+            results
+        })
+        .into_iter()
+        .flatten();
+
+    #[cfg(feature = "timing")]
+    let t3 = Instant::now();
+
+    // Send the contacts
+    broad_contacts.send_batch(final_contacts);
+    
+
+    #[cfg(feature = "timing")]
+    {
+        let t4 = Instant::now();
+        info!(
+            "broadphase: sort {:?}, sweep {:?}, intersect {:?}, send {:?}",
+            t1.duration_since(t0),
+            t2.duration_since(t1),
+            t3.duration_since(t2),
+            t4.duration_since(t3),
+        );
     }
 }
 
@@ -150,13 +199,11 @@ pub fn broadphase_system_weekend(
     }
 }
 
-
-
 // Separating Axis Test
 // If there is no overlap on a particular axis,
 // then the two AABBs do not intersect
 #[inline]
-fn aabb_aabb_interect(a: &Aabb, b: &Aabb) -> bool {
+fn aabb_aabb_intersect(a: &Aabb, b: &Aabb) -> bool {
     if a.mins.x >= b.maxs.x {
         return false;
     }

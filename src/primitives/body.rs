@@ -30,6 +30,8 @@ impl Default for Body {
 }
 
 impl Body {
+
+    #[inline]
     pub fn has_infinite_mass(&self) -> bool {
         self.inv_mass == 0.0
     }

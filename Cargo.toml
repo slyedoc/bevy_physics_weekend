@@ -9,6 +9,7 @@ edition = "2021"
 default = ["static"]
 static = []
 dynamic = []
+timing = []
 trace = [
     "bevy/trace_chrome"
 ]
