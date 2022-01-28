@@ -18,9 +18,6 @@ pub fn broadphase_system(
     mut possable_contacts_local: Local<Vec<BroadContact>>,
     pool: Res<ComputeTaskPool>,
 ) {
-    #[cfg(feature = "timing")]
-    let t0 = Instant::now();
-
     possable_contacts_local.clear();
 
     // TODO: Yes, we are copying the array out here, only way to sort it
@@ -44,8 +41,6 @@ pub fn broadphase_system(
         }
         std::cmp::Ordering::Equal
     });
-    #[cfg(feature = "timing")]
-    let t1 = Instant::now();
 
     // Sweep the array for collisions
     // This is where 90% of the time is spent
@@ -90,46 +85,198 @@ pub fn broadphase_system(
         *sort_axis_local = 2;
     }
 
-    #[cfg(feature = "timing")]
-    let t2 = Instant::now();
+    // filter possable contacts
+    // We still have far to many contacts, filter them by doing aabb collision detection
 
-    // filtter possable contacts
-    // We still have far to many contacts, filter them by doing aabb collision detection    
-    let final_contacts = possable_contacts_local
-        .par_chunk_map(&pool, 10000, |chunk| {
-            let mut results = Vec::new();
-            for c in chunk {
-                unsafe {
-                    let (_, aabb_a) = query.get_unchecked(c.a).unwrap();
-                    let (_, aabb_b) = query.get_unchecked(c.b).unwrap();
-                    if aabb_aabb_intersect(aabb_a, aabb_b) {
-                        results.push(*c);
+    let t0 = Instant::now();
+    //#[cfg(feature = "simd")]
+    {
+        let simd_contacts = possable_contacts_local
+            .par_chunk_map(&pool, 16384, |main_chuck| {
+                let mut results = Vec::new();
+
+                let iter = main_chuck.chunks_exact(4);
+
+                for c in iter.remainder() {
+                    unsafe {
+                        let (_, aabb_a) = query.get_unchecked(c.a).unwrap();
+                        let (_, aabb_b) = query.get_unchecked(c.b).unwrap();
+                        if aabb_aabb_intersect(aabb_a, aabb_b) {
+                            results.push(*c);
+                        }
                     }
                 }
-            }
-            results
-        })
-        .into_iter()
-        .flatten();
+                for (i, chunk) in iter.enumerate() {
+                    unsafe {
+                        // 4 by 4 aabb test
+                        // setup 4 aabbs pairs to be tested
+                        let (_, aabb_1a) = query.get_unchecked(chunk[0].a).unwrap();
+                        let (_, aabb_1b) = query.get_unchecked(chunk[0].b).unwrap();
+                        let (_, aabb_2a) = query.get_unchecked(chunk[1].a).unwrap();
+                        let (_, aabb_2b) = query.get_unchecked(chunk[1].b).unwrap();
+                        let (_, aabb_3a) = query.get_unchecked(chunk[2].a).unwrap();
+                        let (_, aabb_3b) = query.get_unchecked(chunk[2].b).unwrap();
+                        let (_, aabb_4a) = query.get_unchecked(chunk[3].a).unwrap();
+                        let (_, aabb_4b) = query.get_unchecked(chunk[3].b).unwrap();
 
-    #[cfg(feature = "timing")]
-    let t3 = Instant::now();
+                        // breaking aabb into Vec4s
+                        // Group 1
+                        let min1x = Vec4::new(
+                            aabb_1a.mins.x,
+                            aabb_2a.mins.x,
+                            aabb_3a.mins.x,
+                            aabb_4a.mins.x,
+                        );
+                        let min1y = Vec4::new(
+                            aabb_1a.mins.y,
+                            aabb_2a.mins.y,
+                            aabb_3a.mins.y,
+                            aabb_4a.mins.y,
+                        );
+                        let min1z = Vec4::new(
+                            aabb_1a.mins.z,
+                            aabb_2a.mins.z,
+                            aabb_3a.mins.z,
+                            aabb_4a.mins.z,
+                        );
 
-    // Send the contacts
-    broad_contacts.send_batch(final_contacts);
-    
+                        let max1x = Vec4::new(
+                            aabb_1a.maxs.x,
+                            aabb_2a.maxs.x,
+                            aabb_3a.maxs.x,
+                            aabb_4a.maxs.x,
+                        );
+                        let max1y = Vec4::new(
+                            aabb_1a.maxs.y,
+                            aabb_2a.maxs.y,
+                            aabb_3a.maxs.y,
+                            aabb_4a.maxs.y,
+                        );
+                        let max1z = Vec4::new(
+                            aabb_1a.maxs.z,
+                            aabb_2a.maxs.z,
+                            aabb_3a.maxs.z,
+                            aabb_4a.maxs.z,
+                        );
 
-    #[cfg(feature = "timing")]
-    {
-        let t4 = Instant::now();
-        info!(
-            "broadphase: sort {:?}, sweep {:?}, intersect {:?}, send {:?}",
-            t1.duration_since(t0),
-            t2.duration_since(t1),
-            t3.duration_since(t2),
-            t4.duration_since(t3),
-        );
+                        // Group 2
+                        let min2x = Vec4::new(
+                            aabb_1b.mins.x,
+                            aabb_2b.mins.x,
+                            aabb_3b.mins.x,
+                            aabb_4b.mins.x,
+                        );
+                        let min2y = Vec4::new(
+                            aabb_1b.mins.y,
+                            aabb_2b.mins.y,
+                            aabb_3b.mins.y,
+                            aabb_4b.mins.y,
+                        );
+                        let min2z = Vec4::new(
+                            aabb_1b.mins.z,
+                            aabb_2b.mins.z,
+                            aabb_3b.mins.z,
+                            aabb_4b.mins.z,
+                        );
+
+                        let max2x = Vec4::new(
+                            aabb_1b.maxs.x,
+                            aabb_2b.maxs.x,
+                            aabb_3b.maxs.x,
+                            aabb_4b.maxs.x,
+                        );
+                        let max2y = Vec4::new(
+                            aabb_1b.maxs.y,
+                            aabb_2b.maxs.y,
+                            aabb_3b.maxs.y,
+                            aabb_4b.maxs.y,
+                        );
+                        let max2z = Vec4::new(
+                            aabb_1b.maxs.z,
+                            aabb_2b.maxs.z,
+                            aabb_3b.maxs.z,
+                            aabb_4b.maxs.z,
+                        );
+
+                        let ax = min1x.max(min2x);
+                        let bx = max1x.min(max2x);
+                        let ay = min1y.max(min2y);
+                        let by = max1y.min(max2y);
+                        let az = min1z.max(min2z);
+                        let bz = max1z.min(max2z);
+
+                        let t1 = ax.cmple(bx);
+                        let t2 = ay.cmple(by);
+                        let t3 = az.cmple(bz);
+                        let t4 = t1 & t2;
+                        let result = t3 & t4;
+
+                        if i == 0 {
+                            //     info!("1a min x: {}, 1b min x: {}", aabb_1a.mins.x, aabb_1b.mins.x);
+                            //     info!("1a max x: {}, 1b max x: {}", aabb_1a.maxs.x, aabb_1b.maxs.x);
+                            //     info!("min1x {}, min2x {}", min1x, min2x);
+                            //     info!("max1x {}, max2x {}", max1x, max2x);
+                            //     info!("ax {}, bx {}", ax, bx);
+                            //     info!("t1 - {:?}, t2 - {:?}, t3 - {:?}",
+                            //         t1, t2, t3
+                            //     );
+                            //  info!("result - {:?}",
+                            //      result
+                            //  );
+                        }
+
+                        let intersect: [bool; 4] = result.into();
+                        for i in 0..4 {
+                            if intersect[i] {
+                                results.push(chunk[i]);
+                            }
+                        }
+                    }
+                }
+
+                results
+            })
+            .into_iter()
+            .flatten();
+        broad_contacts.send_batch(simd_contacts);
     }
+
+    let t1 = Instant::now();
+    //#[cfg(not(feature = "simd"))]
+    {
+        let final_contacts = possable_contacts_local
+            .par_chunk_map(&pool, 16384, |chunk| {
+                let mut results = Vec::new();
+                for c in chunk {
+                    unsafe {
+                        let (_, aabb_a) = query.get_unchecked(c.a).unwrap();
+                        let (_, aabb_b) = query.get_unchecked(c.b).unwrap();
+                        if aabb_aabb_intersect(aabb_a, aabb_b) {
+                            results.push(*c);
+                        }
+                    }
+                }
+                results
+            })
+            .into_iter()
+            .flatten();
+        //broad_contacts.send_batch(final_contacts);
+    }
+    let t2 = Instant::now();
+    
+    let simd = t1.duration_since(t0);
+    let old = t2.duration_since(t1);
+    let diff = simd.div_duration_f32(old);
+    match diff > 1.0 {
+        true => {
+            warn!("simb: {:?}, old: {:?}, diff {}", simd, old, 1.0 - diff);
+        }
+        false => {
+            info!("simb: {:?}, old: {:?}, diff {}", simd, old, 1.0 - diff);
+        }
+    }
+    
+    
 }
 
 // The was the first solution from weekend series

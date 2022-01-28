@@ -39,7 +39,7 @@ impl FromWorld for StackConfig {
 
         Self {
             shape: Shape::Sphere,
-            count: 5000,
+            count: 10000,
             base_size: 10,
             grid_offset: 3.0,
             ball_material: materials.add(StandardMaterial {
@@ -68,7 +68,7 @@ impl StackConfig {
     pub fn spawn(&self, commands: &mut Commands, meshes: &mut ResMut<Assets<Mesh>>, engine: Engine) {
         let mesh = match self.shape {
             Shape::Sphere => meshes.add(Mesh::from(shape::UVSphere {
-                radius: 1.0,
+                radius: 0.5,
                 sectors: 16,
                 stacks: 16,
             })),
@@ -114,7 +114,7 @@ impl StackConfig {
 
                     match self.shape {
                         Shape::Sphere => {
-                            commands.entity(item).insert(ColliderSphere::new(1.0));
+                            commands.entity(item).insert(ColliderSphere::new(0.5));
                         }
                         Shape::Box => {
                             commands.entity(item).insert(ColliderBox::new_xyz(1.0, 1.0, 1.0));

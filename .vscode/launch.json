@@ -7,8 +7,130 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug",
-            "program": "${workspaceFolder}/<your program>",
+            "name": "Debug unit tests in library 'bevy_physics_weekend'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=bevy_physics_weekend"
+                ],
+                "filter": {
+                    "name": "bevy_physics_weekend",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'stack'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=stack",
+                    "--package=bevy_physics_weekend"
+                ],
+                "filter": {
+                    "name": "stack",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'stack'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=stack",
+                    "--package=bevy_physics_weekend"
+                ],
+                "filter": {
+                    "name": "stack",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'sandbox'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=sandbox",
+                    "--package=bevy_physics_weekend"
+                ],
+                "filter": {
+                    "name": "sandbox",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'sandbox'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=sandbox",
+                    "--package=bevy_physics_weekend"
+                ],
+                "filter": {
+                    "name": "sandbox",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'stack_rapier'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=stack_rapier",
+                    "--package=bevy_physics_weekend"
+                ],
+                "filter": {
+                    "name": "stack_rapier",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'stack_rapier'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=stack_rapier",
+                    "--package=bevy_physics_weekend"
+                ],
+                "filter": {
+                    "name": "stack_rapier",
+                    "kind": "example"
+                }
+            },
             "args": [],
             "cwd": "${workspaceFolder}"
         }

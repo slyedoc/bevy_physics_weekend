@@ -33,6 +33,7 @@ pub struct ColliderSphere {
 
 impl ColliderSphere {
     pub fn new(radius: f32) -> Self {
+
         Self {
             radius,
             bounds: Bounds {

@@ -2,6 +2,7 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
 #![feature(vec_retain_mut)]
+#![feature(div_duration)]
 
 pub mod constraints;
 pub mod debug_render;
