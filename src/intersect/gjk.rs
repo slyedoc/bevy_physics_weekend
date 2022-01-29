@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 use bevy::prelude::*;
-use crate::math::glam_ext::Mat4Ext;
-use crate::primitives::*;
+use crate::{math::glam_ext::Mat4Ext, colliders::{Collider, Tri, Edge}};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 struct Point {

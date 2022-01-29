@@ -1,104 +1,109 @@
 use bevy::prelude::*;
-use bevy::tasks::ParallelSlice;
-use bevy::tasks::*;
-use bevy::utils::Instant;
 
-use crate::primitives::*;
+use crate::{primitives::*, intersect};
 
-// Playing around with a few different solutions here
-
-// Array based sort and sweep algorithm
-// from Real-Time Collision Dection - Christer Ericon page 336
+// The board phase is responsible for pruning the search space of possable collisions
+// I have tried different approaches, and I am sure I will try a few more
+// So far this simple approach has been the fastest
+// TODO: Figure out way to search two axis thats actually faster or bite the bullet and try some space partitioning
 pub fn broadphase_system(
     mut broad_contacts: EventWriter<BroadContact>,
     query: Query<(Entity, &Aabb)>,
-    mut sort_axis_local: Local<usize>,
-    mut contacts_local: Local<Vec<BroadContact>>,
-    pool: Res<ComputeTaskPool>,
 ) {
-    contacts_local.clear();
-
     // TODO: Yes, we are copying the array out here, only way to sort it
     // Ideally we would keep the array around, it should already near sorted
-    // but this is still far faster
     let mut list = query.iter().collect::<Vec<_>>();
-
-    let sort_axis = sort_axis_local.to_owned();
-
+    
     // Sort the array on currently selected sorting axis
-    // TODO: par_sort helps a little, but mostly so harmful on computer with less cores that its not worth it
-    // this is not where the time is spent
-    list.sort_unstable_by(|(_, a), (_, b)| {
-        // Sort on minimum value along either x, y, or z axis
-        let min_a = a.mins[sort_axis];
-        let min_b = b.mins[sort_axis];
-        if min_a < min_b {
-            return std::cmp::Ordering::Less;
-        }
-        if min_a > min_b {
-            return std::cmp::Ordering::Greater;
-        }
-        std::cmp::Ordering::Equal
-    });
+    list.sort_unstable_by(cmp_x_axis);
 
     // Sweep the array for collisions
-    let mut s = [0.0f32; 3];
-    let mut s2 = [0.0f32; 3];
-    let mut v = [0.0f32; 3];
-
-    let mut possible_contacts = Vec::<((Entity, &Aabb), (Entity, &Aabb))>::new();
     for (i, (a, aabb_a)) in list.iter().enumerate() {
-        // Determine AABB center point
-        let p = 0.5 * (aabb_a.mins + aabb_a.maxs);
-
-        // Update sum and sum2 for computing variance of AABB centers
-        for c in 0..3 {
-            s[c] += p[c];
-            s2[c] += p[c] * p[c];
-        }
         // Test collisions against all possible overlapping AABBs following current one
         for (b, aabb_b) in list.iter().skip(i + 1) {
-            // todo: + 1 may be wrong
             // Stop when tested AABBs are beyond the end of current AABB
-            if aabb_b.mins[sort_axis] > aabb_a.maxs[sort_axis] {
+            if aabb_b.mins.x > aabb_a.maxs.x {
                 break;
             }
-
-            // build up a list we need to do aabb collision detection on
-            possible_contacts.push(((*a, *aabb_a), (*b, *aabb_b)));
-            //broad_contacts.send(BroadContact { a: *a, b: *b });
+            if intersect::aabb_aabb_intersect(aabb_a, aabb_b) {
+                broad_contacts.send(BroadContact { a: *a, b: *b });
+            }
         }
+
     }
+}
 
-    // Compute variance (less a, for comparison unnecessary, constant factor)
-    for c in 0..3 {
-        v[c] = s2[c] - s[c] * s[c] / list.len() as f32;
+fn cmp_x_axis( a: &(Entity, &Aabb), b: &(Entity, &Aabb)) -> std::cmp::Ordering {
+    // Sort on minimum value along either x, y, or z axis
+    let min_a = a.1.mins.x;
+    let min_b = b.1.mins.x;
+    if min_a < min_b {
+        return std::cmp::Ordering::Less;
     }
-
-    // Update axis sorted to be the one with greatest AABB variance
-    *sort_axis_local = 0;
-    if v[1] > v[0] {
-        *sort_axis_local = 1;
+    if min_a > min_b {
+        return std::cmp::Ordering::Greater;
     }
-    if v[2] > v[sort_axis] {
-        *sort_axis_local = 2;
+    std::cmp::Ordering::Equal
+}
+
+fn cmp_y_axis( a: &(Entity, &Aabb), b: &(Entity, &Aabb)) -> std::cmp::Ordering {
+    // Sort on minimum value along either x, y, or z axis
+    let min_a = a.1.mins.y;
+    let min_b = b.1.mins.y;
+    if min_a < min_b {
+        return std::cmp::Ordering::Less;
     }
+    if min_a > min_b {
+        return std::cmp::Ordering::Greater;
+    }
+    std::cmp::Ordering::Equal
+}
 
-    // filter possable contacts
-    // We still have far to many contacts, filter them by doing aabb collision detection
+fn cmp_z_axis( a: &(Entity, &Aabb), b: &(Entity, &Aabb)) -> std::cmp::Ordering {
+    // Sort on minimum value along either x, y, or z axis
+    let min_a = a.1.mins.z;
+    let min_b = b.1.mins.z;
+    if min_a < min_b {
+        return std::cmp::Ordering::Less;
+    }
+    if min_a > min_b {
+        return std::cmp::Ordering::Greater;
+    }
+    std::cmp::Ordering::Equal
+}
 
-    let chunk_size = 4096;
-    //#[cfg(feature = "simd")]
 
-    let simd_start = Instant::now();
-    let contacts = possible_contacts
-        .par_chunk_map(&pool, chunk_size, |main_chuck| {
-            let iter = main_chuck.chunks_exact(4);
+// TODO: Was trying to parrallize part of the sweep, its faster most frames but not always, and not that much faster,
+// and pikey
+#[cfg(feature = "disabled")]
+fn find_aabb_intersects(possible_contacts: &[((Entity, &Aabb), (Entity, &Aabb))], pool: Res<ComputeTaskPool>, chunk_size: usize) -> impl Iterator<Item = BroadContact> {
+    possible_contacts
+        .par_chunk_map(&pool, chunk_size, |chunk| {
             let mut results = vec![];
+            for ((a, aabb_a), (b, aabb_b)) in chunk.iter() {
+                if intersect::aabb_aabb_intersect(aabb_a, aabb_b) {
+                    results.push(BroadContact { a: *a, b: *b });
+                }
+            }
+            results
+        })
+        .into_iter()
+        .flatten()
+}
 
-            // go ahead and process any tests that wont fit our simd test
+
+// 4 by 4 Aabb simd test
+// This works, but it was about 10-30% slower in my testing, will come back to this later
+#[cfg(feature = "disabled")]
+fn find_aabb_simd_intersects(possible_contacts: &[((Entity, &Aabb), (Entity, &Aabb))], pool: &Res<ComputeTaskPool>, chunk_size: usize) -> impl Iterator<Item = BroadContact> {
+    possible_contacts
+         .par_chunk_map(pool, chunk_size, |main_chuck| {
+             let iter = main_chuck.chunks_exact(4);
+             let mut results = vec![];
+
+             // go ahead and process any tests that wont fit our simd test
             for ((a, aabb_a), (b, aabb_b)) in iter.remainder() {
-                if aabb_aabb_intersect(aabb_a, aabb_b) {
+                if intersect::aabb_aabb_intersect(aabb_a, aabb_b) {
                     results.push(BroadContact { a: *a, b: *b });
                 }
             }
@@ -215,43 +220,11 @@ pub fn broadphase_system(
             results
         })
         .into_iter()
-        .flatten();
-    let simd_stop = Instant::now();
-    //broad_contacts.send_batch(contacts);
-
-    //#[cfg(not(feature = "simd"))]
-
-    let old_start = Instant::now();
-    let contacts2 = possible_contacts
-        .par_chunk_map(&pool, chunk_size, |chunk| {
-            let mut results = vec![];
-            for ((a, aabb_a), (b, aabb_b)) in chunk.iter() {
-                if aabb_aabb_intersect(aabb_a, aabb_b) {
-                    results.push(BroadContact { a: *a, b: *b });
-                    //broad_contacts.send(BroadContact { a: *a, b: *b });
-                }
-            }
-            results
-        })
-        .into_iter()
-        .flatten();
-    let old_stop = Instant::now();
-    broad_contacts.send_batch(contacts2);
-
-    //let t2 = Instant::now();
-
-    let simd = simd_stop.duration_since(simd_start);
-    let old = old_stop.duration_since(old_start);
-    let diff = simd.div_duration_f32(old);
-    match diff > 1.0 {
-        true => {
-            error!("simd: {:?}, old: {:?}, diff {}", simd, old, 1.0 - diff);
-        }
-        false => {
-            info!("simd: {:?}, old: {:?}, diff {}", simd, old, 1.0 - diff);
-        }
-    }
+        .flatten()
 }
+
+
+
 
 // The was the first solution from weekend series
 // Broadphase (build potential collision pairs)
@@ -318,34 +291,4 @@ pub fn broadphase_system_weekend(
             });
         }
     }
-}
-
-// Separating Axis Test
-// If there is no overlap on a particular axis,
-// then the two AABBs do not intersect
-#[inline]
-fn aabb_aabb_intersect(a: &Aabb, b: &Aabb) -> bool {
-    if a.mins.x >= b.maxs.x {
-        return false;
-    }
-    if a.maxs.x <= b.mins.x {
-        return false;
-    }
-
-    if a.mins.y >= b.maxs.y {
-        return false;
-    }
-    if a.maxs.y <= b.mins.y {
-        return false;
-    }
-
-    if a.mins.z >= b.maxs.z {
-        return false;
-    }
-    if a.maxs.z <= b.mins.z {
-        return false;
-    }
-
-    // Overlap on all three axes, so their intersection must be non-empty
-    true
 }

@@ -4,13 +4,15 @@
 #![feature(vec_retain_mut)]
 #![feature(div_duration)]
 
+pub mod colliders;
 pub mod constraints;
 pub mod debug_render;
-mod intersect;
+pub mod intersect;
 mod math;
 mod phase;
 pub mod primitives;
 
+use colliders::{Collider, ColliderBox, ColliderSphere};
 use primitives::*;
 
 use bevy::{ecs::schedule::ShouldRun, prelude::*};
@@ -18,7 +20,6 @@ use bevy_inspector_egui::Inspectable;
 use phase::*;
 
 use bevy_polyline::*;
-
 
 #[derive(Component, Inspectable)]
 pub struct PhysicsConfig {
@@ -49,6 +50,7 @@ impl Default for PhysicsConfig {
 #[derive(SystemLabel, Clone, Hash, Debug, Eq, PartialEq)]
 pub enum PhysicsSystem {
     First,
+    PreUpdate,
     Dynamics,
     Broadphase,
     NarrowphaseBreakout,
@@ -58,25 +60,26 @@ pub enum PhysicsSystem {
     ResolveContact,
 }
 
-
 pub struct PhysicsPlugin;
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<Contact>()
             .add_event::<BroadContact>()
-            .add_event::<BroadSphereSphere>()
-            .add_event::<BroadSphereBox>()
-            .add_event::<BroadBoxBox>()
+            .add_system_set_to_stage(
+                CoreStage::First,
+                SystemSet::new()
+                    .with_run_criteria(run_physics)
+                    .with_system(timestep_system)
+                    .with_system(collider_add_watch::<ColliderSphere>)
+                    .with_system(collider_add_watch::<ColliderBox>),
+            )
             .add_system_set_to_stage(
                 CoreStage::PreUpdate,
                 SystemSet::new()
                     .with_run_criteria(run_physics)
                     .label(PhysicsSystem::First)
-                    .with_system(timestep_system)
-                    .with_system(update_aabb::<primitives::ColliderSphere>)
-                    .with_system(update_aabb::<primitives::ColliderBox>)
-                    .with_system(collider_add_watch::<primitives::ColliderSphere>)
-                    .with_system(collider_add_watch::<primitives::ColliderBox>),
+                    .with_system(calucate_aabb::<ColliderSphere>)
+                    .with_system(calucate_aabb::<ColliderBox>)
             )
             .add_system_set_to_stage(
                 CoreStage::PreUpdate,
@@ -100,19 +103,9 @@ impl Plugin for PhysicsPlugin {
                 CoreStage::PreUpdate,
                 SystemSet::new()
                     .with_run_criteria(run_physics)
-                    .label(PhysicsSystem::NarrowphaseBreakout)
-                    .after(PhysicsSystem::Broadphase) // chaining
-                    //.with_system(narrowphase::narrowphase_system),
-                    .with_system(narrowphase::narrowphase_breakout_system),
-            )
-            .add_system_set_to_stage(
-                CoreStage::PreUpdate,
-                SystemSet::new()
-                    .with_run_criteria(run_physics)
                     .label(PhysicsSystem::Narrowphase)
-                    .after(PhysicsSystem::NarrowphaseBreakout) // chaining
-                    .with_system(narrowphase::narrow_phase_sphere_box)
-                    .with_system(narrowphase::narrow_phase_sphere_sphere),
+                    .after(PhysicsSystem::Broadphase) // chaining
+                    .with_system(narrowphase::narrowphase_system),
             )
             .add_system_set_to_stage(
                 CoreStage::PreUpdate,
@@ -160,23 +153,43 @@ impl Plugin for PhysicsPlugin {
         app.init_resource::<PhysicsConfig>();
         app.init_resource::<PhysicsTime>();
     }
+
+    fn name(&self) -> &str {
+        std::any::type_name::<Self>()
+    }
 }
 
-pub fn collider_add_watch<T: Component + Collider>(mut commands: Commands, query: Query<(Entity, &GlobalTransform, &T), Added<T>>) {
+pub fn collider_add_watch<T: Component + Collider>(
+    mut commands: Commands,
+    query: Query<(Entity, &GlobalTransform, &T), Added<T>>,
+) {
     for (e, trans, collider) in query.iter() {
         commands.entity(e).insert(collider.aabb(trans));
         commands.entity(e).insert(collider.shape_type());
     }
 }
 
-pub fn update_aabb<T: Component + Collider>(
-    mut query: Query<(&GlobalTransform, &T, &mut Aabb)>,
+pub fn calucate_aabb<T: Component + Collider>(
+    mut query: Query<(&GlobalTransform, &Body, &T, &mut Aabb)>,
+    #[allow(unused)] pt: Res<PhysicsTime>,
 ) {
-    for (trans, collider, mut aabb) in query.iter_mut() {
-        let new_aabb = collider.aabb(trans);
+    #[allow(unused)]
+    for (trans, body, collider, mut aabb) in query.iter_mut() {
+        // TODO: remove this copy and use
+        let mut new_aabb = collider.aabb(trans);
+
+        // expand the bounds by the linear velocity
+        #[cfg(feature = "dynamic")]
+        {
+            new_aabb.expand_by_point(new_aabb.mins + body.linear_velocity * pt.time);
+            new_aabb.expand_by_point(new_aabb.maxs + body.linear_velocity * pt.time);
+        }
+        const BOUNDS_EPS: f32 = 0.01;
+        new_aabb.expand_by_point(new_aabb.mins - Vec3::splat(BOUNDS_EPS));
+        new_aabb.expand_by_point(new_aabb.maxs + Vec3::splat(BOUNDS_EPS));
+
         aabb.mins = new_aabb.mins;
         aabb.maxs = new_aabb.maxs;
-
     }
 }
 

@@ -2,7 +2,7 @@ use std::ops::{Add, AddAssign};
 
 use bevy::prelude::*;
 
-/// A bounding volume.
+/// A bounding volume for object in local space
 #[derive(Component, Copy, Clone, Debug, PartialEq)]
 pub struct Bounds {
     pub mins: Vec3,

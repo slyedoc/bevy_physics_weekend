@@ -1,7 +1,7 @@
 mod helper;
 use bevy::prelude::*;
 use bevy_inspector_egui::InspectorPlugin;
-use bevy_physics_weekend::{primitives::*, PhysicsConfig, PhysicsPlugin};
+use bevy_physics_weekend::{primitives::*, PhysicsConfig, PhysicsPlugin, colliders::ColliderSphere};
 
 fn main() {
     App::new()
@@ -16,7 +16,6 @@ fn main() {
 
         // our plugin
         .add_plugin(PhysicsPlugin)
-        
         // Custom helpers
         .add_plugin(InspectorPlugin::<PhysicsConfig>::new())
         .add_startup_system(setup)
@@ -73,7 +72,7 @@ fn setup(
         })
         .insert(Body {
             inv_mass: 0.0,
-            friction: 0.5,
+            friction: 0.2,
             elasticity: 1.0,
             ..Default::default()
         })

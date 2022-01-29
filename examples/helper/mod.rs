@@ -28,7 +28,7 @@ impl PluginGroup for HelperPlugins {
 
 
 pub fn spawn_light(commands: &mut Commands) {
-    const HALF_SIZE: f32 = 100.0;
+    const HALF_SIZE: f32 = 50.0;
     commands
         .spawn_bundle(DirectionalLightBundle {
             directional_light: DirectionalLight {

@@ -1,7 +1,13 @@
 use bevy::prelude::*;
 use bevy_inspector_egui::{Inspectable, InspectorPlugin};
-use bevy_physics_weekend::primitives::{ColliderBox, ColliderSphere, Body};
-use bevy_rapier3d::{physics::{ColliderBundle, RigidBodyBundle, ColliderPositionSync}, prelude::{ColliderShape, RigidBodyVelocity}};
+use bevy_physics_weekend::{
+    colliders::{ColliderBox, ColliderSphere},
+    primitives::Body,
+};
+use bevy_rapier3d::{
+    physics::{ColliderBundle, ColliderPositionSync, RigidBodyBundle},
+    prelude::{ColliderShape, RigidBodyVelocity},
+};
 
 use super::Reset;
 
@@ -14,11 +20,11 @@ impl Plugin for StackConfigPlugin {
     }
 }
 
-
 #[derive(Inspectable)]
 pub struct StackConfig {
     pub count: usize,
     pub base_size: usize,
+    #[inspectable(min=1.0, max=10.0)]
     pub grid_offset: f32,
     pub start_height: f32,
 
@@ -39,9 +45,9 @@ impl FromWorld for StackConfig {
 
         Self {
             shape: Shape::Sphere,
-            count: 10000,
+            count: 2000,
             base_size: 10,
-            grid_offset: 3.0,
+            grid_offset: 1.0,
             ball_material: materials.add(StandardMaterial {
                 base_color_texture: Some(asset_server.load("checker_red.png")),
                 ..Default::default()
@@ -65,16 +71,19 @@ pub enum Shape {
 
 impl StackConfig {
     #[allow(dead_code)]
-    pub fn spawn(&self, commands: &mut Commands, meshes: &mut ResMut<Assets<Mesh>>, engine: Engine) {
+    pub fn spawn(
+        &self,
+        commands: &mut Commands,
+        meshes: &mut ResMut<Assets<Mesh>>,
+        engine: Engine,
+    ) {
         let mesh = match self.shape {
             Shape::Sphere => meshes.add(Mesh::from(shape::UVSphere {
                 radius: 0.5,
                 sectors: 16,
                 stacks: 16,
             })),
-            Shape::Box => meshes.add(Mesh::from(shape::Box::new(
-                1.0, 1.0, 1.0,
-            ))),
+            Shape::Box => meshes.add(Mesh::from(shape::Box::new(1.0, 1.0, 1.0))),
         };
 
         let b2 = self.base_size * self.base_size;
@@ -92,7 +101,7 @@ impl StackConfig {
                 pos.y += self.grid_offset;
             }
 
-            let item =commands
+            let item = commands
                 .spawn_bundle(PbrBundle {
                     transform: Transform::from_translation(pos),
                     mesh: mesh.clone(),
@@ -107,7 +116,7 @@ impl StackConfig {
                 Engine::Crate => {
                     commands.entity(item).insert(Body {
                         inv_mass: 1.0,
-                        elasticity: 0.9,
+                        elasticity: 1.0,
                         friction: 0.9,
                         ..Default::default()
                     });
@@ -117,39 +126,38 @@ impl StackConfig {
                             commands.entity(item).insert(ColliderSphere::new(0.5));
                         }
                         Shape::Box => {
-                            commands.entity(item).insert(ColliderBox::new_xyz(1.0, 1.0, 1.0));
+                            commands
+                                .entity(item)
+                                .insert(ColliderBox::new_xyz(1.0, 1.0, 1.0));
                         }
                     }
-                },
+                }
                 Engine::Rapier => {
-
-                    commands.entity(item).insert_bundle(RigidBodyBundle {
-                        position: pos.into(),
-                        // TODO: Remove this, a small velocity so its not a stable stack
-                        velocity: RigidBodyVelocity {
-                            linvel: Vec3::new(0.1, 0.0, 0.0).into(),
-                            angvel: Vec3::new(0.1, 0.0, 0.0).into(),
-                        }
-                        .into(),
-                        ..Default::default()
-                    })
-                    .insert_bundle(ColliderBundle {
-                        shape: match self.shape {
-                            Shape::Sphere  => ColliderShape::ball(1.0).into(),
-                            Shape::Box => {
-                                ColliderShape::cuboid(0.5, 0.5, 0.5).into()
+                    commands
+                        .entity(item)
+                        .insert_bundle(RigidBodyBundle {
+                            position: pos.into(),
+                            // TODO: Remove this, a small velocity so its not a stable stack
+                            velocity: RigidBodyVelocity {
+                                linvel: Vec3::new(0.1, 0.0, 0.0).into(),
+                                angvel: Vec3::new(0.1, 0.0, 0.0).into(),
                             }
-                        },
-                        ..ColliderBundle::default()
-                    })
-                    .insert(ColliderPositionSync::Discrete);
-                },
+                            .into(),
+                            ..Default::default()
+                        })
+                        .insert_bundle(ColliderBundle {
+                            shape: match self.shape {
+                                Shape::Sphere => ColliderShape::ball(0.5).into(),
+                                Shape::Box => ColliderShape::cuboid(0.5, 0.5, 0.5).into(),
+                            },
+                            ..ColliderBundle::default()
+                        })
+                        .insert(ColliderPositionSync::Discrete);
+                }
             }
         }
     }
 }
-
-
 
 #[allow(dead_code)]
 pub fn input_system(input: Res<Input<KeyCode>>, mut config: ResMut<StackConfig>) {

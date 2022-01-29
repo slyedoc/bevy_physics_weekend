@@ -19,11 +19,6 @@ pub struct BroadContact {
     pub b: Entity,
 }
 
-pub struct BroadSphereSphere(pub BroadContact);
-
-pub struct BroadSphereBox(pub BroadContact);
-pub struct BroadBoxBox(pub BroadContact);
-
 
 impl PartialEq for BroadContact {
     fn eq(&self, other: &Self) -> bool {

@@ -1,7 +1,7 @@
 mod helper;
 use bevy::prelude::*;
 use bevy_inspector_egui::InspectorPlugin;
-use bevy_physics_weekend::{ PhysicsConfig, PhysicsPlugin, primitives::{Body, ColliderSphere, ColliderBox}};
+use bevy_physics_weekend::{primitives::Body, PhysicsConfig, PhysicsPlugin, colliders::{ColliderSphere, ColliderBox}};
 
 fn main() {
     App::new()
@@ -15,7 +15,7 @@ fn main() {
         .add_plugin(InspectorPlugin::<PhysicsConfig>::new())
         // our plugin
         .add_plugin(PhysicsPlugin)
-        .add_startup_system( setup)
+        .add_startup_system(setup)
         .add_system(setup_level)
         .run();
 }
@@ -50,7 +50,7 @@ fn setup_level(
                     friction: 0.5,
                     ..Default::default()
                 })
-                .insert(ColliderSphere::new( 1.0 ))
+                .insert(ColliderSphere::new(1.0))
                 .insert(helper::Reset)
                 .insert(Name::new("Sphere"));
         }
@@ -72,7 +72,7 @@ fn setup_level(
                 friction: 0.5,
                 ..Default::default()
             })
-            .insert( ColliderBox::from(Vec3::ONE))
+            .insert(ColliderBox::from(Vec3::ONE))
             .insert(helper::Reset)
             .insert(Name::new("Box"));
     }
@@ -117,7 +117,7 @@ fn setup(
             elasticity: 0.5,
             ..Default::default()
         })
-        .insert( ColliderSphere::new(ground_radius))
+        .insert(ColliderSphere::new(ground_radius))
         .insert(Name::new("Ground"));
 
     // /*
