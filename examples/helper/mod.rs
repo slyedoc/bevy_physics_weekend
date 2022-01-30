@@ -29,13 +29,13 @@ impl Plugin for HelperPlugin {
     }
 }
 
-
+#[cfg(feature = "timeout")]
+/// This system will exit the app after 5 secs timeout, used for pref tests
 pub fn timeout_system(time: Res<Time>, mut quit: EventWriter<AppExit>) {
     if time.time_since_startup().as_secs_f32() > 5.0 {
         quit.send(AppExit);
     }
 }
-
 
 pub fn spawn_light(commands: &mut Commands) {
     const HALF_SIZE: f32 = 50.0;

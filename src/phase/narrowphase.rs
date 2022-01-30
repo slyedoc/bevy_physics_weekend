@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    colliders::{ColliderSphere, ColliderType},
+    colliders::{ColliderSphere, ColliderType, ColliderBox},
     intersect,
     primitives::*,
 };
@@ -11,7 +11,7 @@ pub fn narrowphase_system_static(
     mut broad_contacts: EventReader<BroadContact>,
     bodies: Query<(&GlobalTransform, &Body, &ColliderType)>,
     spheres: Query<&ColliderSphere>,
-    //boxes: Query<&ColliderBox>,
+    boxes: Query<&ColliderBox>,
     mut contacts: EventWriter<Contact>,
 ) {
     for pair in broad_contacts.iter() {
@@ -53,15 +53,39 @@ pub fn narrowphase_system_static(
                         });
                     }
                 }
+                (ColliderType::Sphere, ColliderType::Box) => {
+                    let sphere_a = spheres.get_unchecked(pair.a).unwrap();
+                    let box_b = boxes.get_unchecked(pair.b).unwrap();
+                    const BIAS: f32 = 0.001;
+                    if let Some((mut world_point_a, mut world_point_b)) =
+                        intersect::gjk_does_intersect(sphere_a, trans_a, box_b, trans_b, BIAS)
+                    {
+                        let normal = (world_point_b - world_point_a).normalize_or_zero();
+                        world_point_a -= normal * BIAS;
+                        world_point_b += normal * BIAS;
+
+                        contacts.send(Contact {
+                                entity_a: pair.a,
+                                entity_b: pair.b,
+                                world_point_a,
+                                world_point_b,
+                                local_point_a: body_a.world_to_local(trans_a, world_point_a),
+                                local_point_b: body_b.world_to_local(trans_b, world_point_b),
+                                normal,
+                                separation_dist: -(world_point_a - world_point_b).length(),
+                                time_of_impact: 0.0,
+                            });
+                    }
+                }
+                (ColliderType::Box, ColliderType::Sphere) => todo!(),
                 (_, _) => todo!(),
+
             }
         }
     }
 }
 
-
 pub fn narrowphase_system_dynamic(
-    mut commands: Commands,
     mut broad_contacts: EventReader<BroadContact>,
     mut manifold_contacts: EventWriter<ManifoldContactEvent>,
     bodies: Query<(&mut GlobalTransform, &mut Body, &ColliderType)>,
@@ -79,7 +103,6 @@ pub fn narrowphase_system_dynamic(
                 continue;
             }
 
-            
             match (shape_a, shape_b) {
                 (ColliderType::Sphere, ColliderType::Sphere) => {
                     let sphere_a = spheres.get_unchecked(pair.a).unwrap();
@@ -128,7 +151,6 @@ pub fn narrowphase_system_dynamic(
 
                         if time_of_impact == 0.0 {
                             // static contact
-
                             manifold_contacts.send(ManifoldContactEvent(contact));
                         } else {
                             // ballistic contact
@@ -144,7 +166,6 @@ pub fn narrowphase_system_dynamic(
                                 time_of_impact: 0.0,
                             });
                         }
-
                     }
                 }
                 (_, _) => todo!(),
