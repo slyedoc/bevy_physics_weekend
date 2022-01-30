@@ -19,6 +19,8 @@ pub struct BroadContact {
     pub b: Entity,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct ManifoldContactEvent(pub Contact);
 
 impl PartialEq for BroadContact {
     fn eq(&self, other: &Self) -> bool {

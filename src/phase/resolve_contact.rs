@@ -1,4 +1,8 @@
-use crate::{primitives::*, PhysicsTime};
+use crate::{
+    constraints::{ConstraintConfig, ConstraintPenetration},
+    primitives::*,
+    PhysicsTime,
+};
 
 use bevy::prelude::*;
 
@@ -47,22 +51,11 @@ pub fn resolve_contact_system(
         // Apply Ballistic impulses
         let mut accumulated_time = 0.0;
         for contact in list.iter() {
-            unsafe {
-                let a = query.get_unchecked(contact.entity_a);
-                let b = query.get_unchecked(contact.entity_b);
-
-                if a.is_err() || b.is_err() {
-                    continue;
-                }
-
-                let (mut body_a, mut transform_a) = a.unwrap();
-                let (mut body_b, mut transform_b) = b.unwrap();
-            }
             let contact_time = contact.time_of_impact - accumulated_time;
 
-            //position update
+            // position update
             for (mut body, mut transform) in query.iter_mut() {
-                body.update(&mut transform, contact_time)
+                body.update(&mut transform, contact_time);
             }
 
             unsafe {
@@ -162,5 +155,123 @@ fn resolve_contact(
 
         transform_a.translation += direction * a_move_weight;
         transform_b.translation -= direction * b_move_weight;
+    }
+}
+
+const MAX_CONTACTS: usize = 4;
+pub fn add_manifold_contact_system(
+    commands: &mut Commands,
+    mut contacts: EventReader<ManifoldContactEvent>,
+    query: Query<(&mut Body, &mut GlobalTransform)>,
+    mut manifolds: Query<&mut Manifold>,
+) {
+    for contact in contacts.iter() {
+        let mut contact = contact.0.to_owned();
+
+        unsafe {
+            let (body_a, transform_a) = query.get_unchecked(contact.entity_a).unwrap();
+            let (body_b, transform_b) = query.get_unchecked(contact.entity_b).unwrap();
+
+            let mut manifold = manifolds
+                .iter_mut()
+                .find(|m| {
+                    let has_a = m.handle_a == contact.entity_a || m.handle_b == contact.entity_a;
+                    let has_b = m.handle_a == contact.entity_b || m.handle_b == contact.entity_b;
+                    if has_a && has_b {
+                        return true;
+                    }
+                    false
+                })
+                .unwrap();
+
+            // make sure the contact's body_a and body_b are of the correct order
+            if contact.entity_a != manifold.handle_a || contact.entity_b != manifold.handle_b {
+                std::mem::swap(&mut contact.local_point_a, &mut contact.local_point_b);
+                std::mem::swap(&mut contact.world_point_a, &mut contact.world_point_b);
+                std::mem::swap(&mut contact.entity_a, &mut contact.entity_b);
+            }
+
+            // check existing contacts
+
+            let new_a = body_a.local_to_world(&transform_a, contact.local_point_a);
+            let new_b = body_b.local_to_world(&transform_b, contact.local_point_b);
+
+            for cc in &manifold.contact_contraints {
+                // if this contact is close to another contact then keep the old contact
+                let old_a = body_a.local_to_world(&transform_a, cc.contact.local_point_a);
+                let old_b = body_b.local_to_world(&transform_b, cc.contact.local_point_b);
+
+                let aa = new_a - old_a;
+                let bb = new_b - old_b;
+
+                const DISTANCE_THRESHOLD: f32 = 0.02;
+                const DISTANCE_THRESHOLD_SQ: f32 = DISTANCE_THRESHOLD * DISTANCE_THRESHOLD;
+                if aa.length_squared() < DISTANCE_THRESHOLD_SQ {
+                    return;
+                }
+                if bb.length_squared() < DISTANCE_THRESHOLD_SQ {
+                    return;
+                }
+            }
+
+            let mut new_slot = manifold.contact_contraints.len();
+            if manifold.contact_contraints.len() >= MAX_CONTACTS {
+                // find the avg point
+                let mut avg = Vec3::ZERO;
+                for cc in &manifold.contact_contraints {
+                    avg += cc.contact.local_point_a;
+                }
+                avg += contact.local_point_a;
+                avg *= 1.0 / (manifold.contact_contraints.len() + 1) as f32;
+
+                // find farthest contact
+                let mut min_dist = (avg - contact.local_point_a).length_squared();
+                let mut new_idx = None;
+                for i in 0..MAX_CONTACTS {
+                    let dist2 = (avg - manifold.contact_contraints[i].contact.local_point_a)
+                        .length_squared();
+
+                    if dist2 < min_dist {
+                        min_dist = dist2;
+                        new_idx = Some(i);
+                    }
+                }
+
+                if let Some(new_idx) = new_idx {
+                    new_slot = new_idx;
+                } else {
+                    // new contact is the farthest away, exit
+                    return;
+                }
+            }
+
+            // build contraint
+            let mut normal = transform_a.rotation.inverse() * -contact.normal;
+            normal = normal.normalize();
+            let constraint = ConstraintPenetration::new(
+                ConstraintConfig {
+                    handle_a: contact.entity_a,
+                    handle_b: contact.entity_b,
+                    anchor_a: contact.local_point_a,
+                    anchor_b: contact.local_point_b,
+                    ..ConstraintConfig::default()
+                },
+                normal,
+            );
+            let constraint_entity = commands.spawn().insert(constraint).id();
+
+            // add or replace contact
+            if new_slot == manifold.contact_contraints.len() {
+                manifold.contact_contraints.push(ManifoldConstraint {
+                    contact,
+                    constraint_entity,
+                });
+            } else {
+                manifold.contact_contraints[new_slot] = ManifoldConstraint {
+                    contact,
+                    constraint_entity,
+                };
+            }
+        }
     }
 }

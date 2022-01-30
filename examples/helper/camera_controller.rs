@@ -1,6 +1,4 @@
 #![allow(clippy::type_complexity)]
-
-// TODO: Just copied this from another project, needs to be cleaned up
 use bevy::{
     core::Time,
     input::{mouse::MouseMotion, Input},
@@ -167,6 +165,7 @@ fn update_camera_controller(
                 controller.yaw - mouse_delta.x * controller.sensitivity * dt,
             );
 
+            // Apply smoothing
             let target = Quat::from_euler(EulerRot::ZYX, 0.0, yaw, pitch);
             transform.rotation = transform.rotation.lerp(target, 0.5);
 

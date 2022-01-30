@@ -1,7 +1,6 @@
-use crate::{
-    constraints::{ConstraintPenetration, ConstraintConfig},
-
-};
+use crate::
+    constraints::ConstraintPenetration
+;
 use bevy::prelude::*;
 
 use super::{Contact, Body};
@@ -29,104 +28,6 @@ impl Manifold {
         }
     }
 
-    pub fn add_contact(
-        &mut self,
-        commands: &mut Commands,
-        body_a: &Body,
-        transform_a: &GlobalTransform,
-        body_b: &Body,
-        transform_b: &GlobalTransform,
-        bodies: &Query<(&Body, &GlobalTransform)>,
-        contact: Contact,
-    ) {
-
-        // check existing contacts
-        for cc in &self.contact_contraints {
-            // if this contact is close to another contact then keep the old contact
-            let old_a = body_a.local_to_world(transform_a, cc.contact.local_point_a);
-            let old_b = body_b.local_to_world(transform_b, cc.contact.local_point_b);
-
-            // TODO: Revisit this
-            unsafe {
-                let (new_body_a, new_trans_a) = bodies.get_unchecked(contact.entity_a).unwrap();
-                let (new_body_b, new_trans_b) = bodies.get_unchecked(contact.entity_b).unwrap();
-
-                let new_a = new_body_a.local_to_world(new_trans_a, contact.local_point_a);
-                let new_b = new_body_b.local_to_world(new_trans_b, contact.local_point_b);
-
-                let aa = new_a - old_a;
-                let bb = new_b - old_b;
-
-                const DISTANCE_THRESHOLD: f32 = 0.02;
-                const DISTANCE_THRESHOLD_SQ: f32 = DISTANCE_THRESHOLD * DISTANCE_THRESHOLD;
-                if aa.length_squared() < DISTANCE_THRESHOLD_SQ {
-                    return;
-                }
-                if bb.length_squared() < DISTANCE_THRESHOLD_SQ {
-                    return;
-                }
-            }
-        }
-
-        let mut new_slot = self.contact_contraints.len();
-        if self.contact_contraints.len() >= MAX_CONTACTS {
-            // find the avg point
-            let mut avg = Vec3::ZERO;
-            for cc in &self.contact_contraints {
-                avg += cc.contact.local_point_a;
-            }
-            avg += contact.local_point_a;
-            avg *= 1.0 / (self.contact_contraints.len() + 1) as f32;
-
-            // find farthest contact
-            let mut min_dist = (avg - contact.local_point_a).length_squared();
-            let mut new_idx = None;
-            for i in 0..MAX_CONTACTS {
-                let dist2 =
-                    (avg - self.contact_contraints[i].contact.local_point_a).length_squared();
-
-                if dist2 < min_dist {
-                    min_dist = dist2;
-                    new_idx = Some(i);
-                }
-            }
-
-            if let Some(new_idx) = new_idx {
-                new_slot = new_idx;
-            } else {
-                // new contact is the farthest away, exit
-                return;
-            }
-        }
-
-        // build contraint
-        let mut normal = transform_a.rotation.inverse() * -contact.normal;
-        normal = normal.normalize();
-        let constraint = ConstraintPenetration::new(
-            ConstraintConfig {
-                handle_a: contact.entity_a,
-                handle_b: contact.entity_b,
-                anchor_a: contact.local_point_a,
-                anchor_b: contact.local_point_b,
-                ..ConstraintConfig::default()
-            },
-            normal,
-        );
-        let constraint_entity = commands.spawn().insert(constraint).id();
-
-        // add or replace contact
-        if new_slot == self.contact_contraints.len() {
-            self.contact_contraints.push(ManifoldConstraint {
-                contact,
-                constraint_entity,
-            });
-        } else {
-            self.contact_contraints[new_slot] = ManifoldConstraint {
-                contact,
-                constraint_entity,
-            };
-        }
-    }
 }
 
 pub fn manifold_remove_expired_system(

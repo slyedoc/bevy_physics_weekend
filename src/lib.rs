@@ -55,6 +55,7 @@ pub enum PhysicsSystem {
     Broadphase,
     NarrowphaseBreakout,
     Narrowphase,
+    Manifold,
     ConstraintsPreSolve,
     ConstraintsSolve,
     ResolveContact,
@@ -65,6 +66,7 @@ impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<Contact>()
             .add_event::<BroadContact>()
+            .add_event::<ManifoldContactEvent>()
             .add_system_set_to_stage(
                 CoreStage::First,
                 SystemSet::new()
@@ -79,14 +81,14 @@ impl Plugin for PhysicsPlugin {
                     .with_run_criteria(run_physics)
                     .label(PhysicsSystem::First)
                     .with_system(calucate_aabb::<ColliderSphere>)
-                    .with_system(calucate_aabb::<ColliderBox>)
+                    .with_system(calucate_aabb::<ColliderBox>),
             )
             .add_system_set_to_stage(
                 CoreStage::PreUpdate,
                 SystemSet::new()
                     .with_run_criteria(run_physics)
                     .label(PhysicsSystem::Dynamics)
-                    .after(PhysicsSystem::First) // chaining
+                    .after(PhysicsSystem::First)
                     .with_system(dynamics::dynamics_gravity_system),
             )
             .add_system_set_to_stage(
@@ -94,20 +96,28 @@ impl Plugin for PhysicsPlugin {
                 SystemSet::new()
                     .with_run_criteria(run_physics)
                     .label(PhysicsSystem::Broadphase)
-                    .after(PhysicsSystem::Dynamics) // chaining
-                    //.with_system(broadphase::broadphase_system)
-                    //.with_system(broadphase::broadphase_system_aabb)
+                    .after(PhysicsSystem::Dynamics)
                     .with_system(broadphase::broadphase_system),
-            )
-            .add_system_set_to_stage(
+            );
+            #[cfg(feature = "static")]
+            app.add_system_set_to_stage(
                 CoreStage::PreUpdate,
                 SystemSet::new()
                     .with_run_criteria(run_physics)
                     .label(PhysicsSystem::Narrowphase)
-                    .after(PhysicsSystem::Broadphase) // chaining
-                    .with_system(narrowphase::narrowphase_system),
-            )
-            .add_system_set_to_stage(
+                    .after(PhysicsSystem::Broadphase)
+                    .with_system(narrowphase::narrowphase_system_static),
+            );
+            #[cfg(feature = "dynamic")]
+            app.add_system_set_to_stage(
+                CoreStage::PreUpdate,
+                SystemSet::new()
+                    .with_run_criteria(run_physics)
+                    .label(PhysicsSystem::Narrowphase)
+                    .after(PhysicsSystem::Broadphase)
+                    .with_system(narrowphase::narrowphase_system_dynamic),
+            );
+            app.add_system_set_to_stage(
                 CoreStage::PreUpdate,
                 SystemSet::new()
                     .with_run_criteria(run_physics)
@@ -202,5 +212,7 @@ fn run_physics(config: Res<PhysicsConfig>) -> ShouldRun {
 }
 
 fn timestep_system(time: Res<Time>, config: Res<PhysicsConfig>, mut pt: ResMut<PhysicsTime>) {
+    // NOTE: I am avoiding using fixed time, thats because
+    // we want to develop the hot path of the physics system
     pt.time = time.delta_seconds() * config.time_dilation;
 }

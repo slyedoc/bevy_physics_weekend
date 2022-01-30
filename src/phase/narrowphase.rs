@@ -6,14 +6,13 @@ use crate::{
     primitives::*,
 };
 // Narrowphase (perform actual collision detection)
-pub fn narrowphase_system(
+#[cfg(feature = "static")]
+pub fn narrowphase_system_static(
     mut broad_contacts: EventReader<BroadContact>,
     bodies: Query<(&GlobalTransform, &Body, &ColliderType)>,
     spheres: Query<&ColliderSphere>,
     //boxes: Query<&ColliderBox>,
     mut contacts: EventWriter<Contact>,
-    mut commands: Commands,
-    pt: Res<PhysicsTime>,
 ) {
     for pair in broad_contacts.iter() {
         unsafe {
@@ -24,7 +23,6 @@ pub fn narrowphase_system(
                 continue;
             }
 
-            #[cfg(feature = "static")]
             match (shape_a, shape_b) {
                 (ColliderType::Sphere, ColliderType::Sphere) => {
                     let sphere_a = spheres.get_unchecked(pair.a).unwrap();
@@ -57,58 +55,99 @@ pub fn narrowphase_system(
                 }
                 (_, _) => todo!(),
             }
+        }
+    }
+}
 
-            #[cfg(feature = "dynamic")]
-            {
-                match (shape_a, shape_b) {
-                    (ColliderType::Sphere, ColliderType::Sphere) => {
-                        let sphere_a = spheres.get_unchecked(pair.a).unwrap();
-                        let sphere_b = spheres.get_unchecked(pair.b).unwrap();
+#[cfg(feature = "dynamic")]
+pub fn narrowphase_system_dynamic(
+    mut commands: Commands,
+    mut broad_contacts: EventReader<BroadContact>,
+    mut manifold_contacts: EventWriter<ManifoldContactEvent>,
+    bodies: Query<(&mut GlobalTransform, &mut Body, &ColliderType)>,
+    spheres: Query<&ColliderSphere>,
+    //boxes: Query<&ColliderBox>,
+    mut contacts: EventWriter<Contact>,
+    pt: Res<crate::PhysicsTime>,
+) {
+    for pair in broad_contacts.iter() {
+        unsafe {
+            let (mut trans_a, mut body_a, shape_a) = bodies.get_unchecked(pair.a).unwrap();
+            let (mut trans_b, mut body_b, shape_b) = bodies.get_unchecked(pair.b).unwrap();
 
-                        if let Some((world_point_a, world_point_b, time_of_impact)) =
-                            intersect::sphere_sphere_dynamic(
-                                sphere_a.radius,
-                                sphere_b.radius,
-                                trans_a.translation,
-                                trans_b.translation,
-                                body_a.linear_velocity,
-                                body_b.linear_velocity,
-                                pt.time,
-                            )
-                        {
-                            // simulate moving forward to get local space collision points
-                            let (pos_a, local_point_a) = body_a.local_collision_point(
-                                trans_a,
-                                time_of_impact,
-                                world_point_a,
-                            );
-                            let (pos_b, local_point_b) = body_b.local_collision_point(
-                                trans_b,
-                                time_of_impact,
-                                world_point_b,
-                            );
+            if body_a.has_infinite_mass() && body_b.has_infinite_mass() {
+                continue;
+            }
 
-                            let normal = (pos_a - pos_b).normalize();
+            
+            match (shape_a, shape_b) {
+                (ColliderType::Sphere, ColliderType::Sphere) => {
+                    let sphere_a = spheres.get_unchecked(pair.a).unwrap();
+                    let sphere_b = spheres.get_unchecked(pair.b).unwrap();
 
-                            // calculate the separation distance
-                            let ab = trans_a.translation - trans_b.translation;
-                            let separation_dist = ab.length() - (sphere_a.radius + sphere_a.radius);
+                    if let Some((world_point_a, world_point_b, time_of_impact)) =
+                        intersect::sphere_sphere_dynamic(
+                            sphere_a.radius,
+                            sphere_b.radius,
+                            trans_a.translation,
+                            trans_b.translation,
+                            body_a.linear_velocity,
+                            body_b.linear_velocity,
+                            pt.time,
+                        )
+                    {
+                        // step bodies forward to get local space collision points
+                        body_a.update(&mut trans_a, time_of_impact);
+                        body_b.update(&mut trans_b, time_of_impact);
 
+                        // convert world space contacts to local space
+                        let local_point_a = body_a.world_to_local(&trans_a, world_point_a);
+                        let local_point_b = body_b.world_to_local(&trans_b, world_point_b);
+
+                        let normal = (trans_a.translation - trans_b.translation).normalize();
+
+                        // unwind time step
+                        body_a.update(&mut trans_a, -time_of_impact);
+                        body_b.update(&mut trans_b, -time_of_impact);
+
+                        // calculate the separation distance
+                        let ab = trans_a.translation - trans_b.translation;
+                        let separation_dist = ab.length() - (sphere_a.radius + sphere_b.radius);
+
+                        let contact = Contact {
+                            world_point_a,
+                            world_point_b,
+                            local_point_a,
+                            local_point_b,
+                            normal,
+                            separation_dist,
+                            time_of_impact,
+                            entity_a: pair.a,
+                            entity_b: pair.b,
+                        };
+
+                        if time_of_impact == 0.0 {
+                            // static contact
+
+                            manifold_contacts.send(ManifoldContactEvent(contact));
+                        } else {
+                            // ballistic contact
                             contacts.send(Contact {
-                                world_point_a,
-                                world_point_b,
+                                entity_a: pair.a,
+                                entity_b: pair.b,
+                                world_point_a: local_point_a,
+                                world_point_b: local_point_b,
                                 local_point_a,
                                 local_point_b,
                                 normal,
                                 separation_dist,
-                                time_of_impact,
-                                entity_a: pair.a,
-                                entity_b: pair.b,
+                                time_of_impact: 0.0,
                             });
                         }
+
                     }
-                    (_, _) => todo!(),
                 }
+                (_, _) => todo!(),
             }
 
             // if let Some(contact) = contact_result {
@@ -163,6 +202,3 @@ pub fn narrowphase_system(
         }
     }
 }
-
-use crate::PhysicsTime;
-
