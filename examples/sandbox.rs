@@ -2,6 +2,7 @@ mod helper;
 use bevy::prelude::*;
 use bevy_inspector_egui::InspectorPlugin;
 use bevy_physics_weekend::{primitives::Body, PhysicsConfig, PhysicsPlugin, colliders::{ColliderSphere, ColliderBox}};
+use helper::HelperPlugin;
 
 fn main() {
     App::new()
@@ -11,7 +12,7 @@ fn main() {
             ..Default::default()
         })
         .add_plugins(DefaultPlugins)
-        .add_plugins(helper::HelperPlugins)
+        .add_plugin(HelperPlugin)
         .add_plugin(InspectorPlugin::<PhysicsConfig>::new())
         // our plugin
         .add_plugin(PhysicsPlugin)

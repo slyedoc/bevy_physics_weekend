@@ -6,7 +6,7 @@ use crate::{
     primitives::*,
 };
 // Narrowphase (perform actual collision detection)
-#[cfg(feature = "static")]
+
 pub fn narrowphase_system_static(
     mut broad_contacts: EventReader<BroadContact>,
     bodies: Query<(&GlobalTransform, &Body, &ColliderType)>,
@@ -59,7 +59,7 @@ pub fn narrowphase_system_static(
     }
 }
 
-#[cfg(feature = "dynamic")]
+
 pub fn narrowphase_system_dynamic(
     mut commands: Commands,
     mut broad_contacts: EventReader<BroadContact>,

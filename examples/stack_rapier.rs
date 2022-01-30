@@ -12,7 +12,7 @@ fn main() {
             ..Default::default()
         })
         .add_plugins(DefaultPlugins)
-        .add_plugins(HelperPlugins)
+        .add_plugin(HelperPlugin)
         .add_plugin(helper::StackConfigPlugin)
         // Rapier
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())

@@ -4,7 +4,7 @@ pub mod fps;
 pub mod reset;
 pub mod stack_config;
 
-use bevy::{prelude::*, app::PluginGroupBuilder};
+use bevy::{prelude::*, app::AppExit};
 use bevy_inspector_egui::InspectorPlugin;
 
 use bevy_physics_weekend::debug_render::PhysicsReport;
@@ -14,15 +14,25 @@ pub use fps::*;
 pub use reset::*;
 pub use stack_config::*;
 
-pub struct HelperPlugins;
+pub struct HelperPlugin;
 
-impl PluginGroup for HelperPlugins {
-    fn build(&mut self, group: &mut PluginGroupBuilder) {
-        group.add(EditorPlugin);
-        group.add(CameraControllerPlugin);
-        group.add(ResetPlugin);
-        group.add(FPSPlugin);
-        group.add(InspectorPlugin::<PhysicsReport>::new());
+impl Plugin for HelperPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_plugin(EditorPlugin)
+        .add_plugin(CameraControllerPlugin)
+        .add_plugin(ResetPlugin)
+        .add_plugin(FPSPlugin)
+        .add_plugin(InspectorPlugin::<PhysicsReport>::new());
+
+        #[cfg(feature = "timeout")]
+        app.add_system(timeout_system);
+    }
+}
+
+
+pub fn timeout_system(time: Res<Time>, mut quit: EventWriter<AppExit>) {
+    if time.time_since_startup().as_secs_f32() > 5.0 {
+        quit.send(AppExit);
     }
 }
 

@@ -1,0 +1,1 @@
+perf report --hierarchy -M intel

@@ -11,7 +11,7 @@ fn main() {
             ..Default::default()
         })
         .add_plugins(DefaultPlugins)
-        .add_plugins(helper::HelperPlugins)
+        .add_plugin(helper::HelperPlugin)
         .add_plugin(helper::StackConfigPlugin)
 
         // our plugin

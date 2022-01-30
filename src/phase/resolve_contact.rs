@@ -6,78 +6,78 @@ use crate::{
 
 use bevy::prelude::*;
 
-pub fn resolve_contact_system(
+pub fn resolve_contact_system_static(
     pt: Res<PhysicsTime>,
     mut query: Query<(&mut Body, &mut GlobalTransform)>,
     mut contacts: EventReader<Contact>,
 ) {
-    #[cfg(feature = "static")]
-    {
-        for contact in contacts.iter() {
-            unsafe {
-                let a = query.get_unchecked(contact.entity_a);
-                let b = query.get_unchecked(contact.entity_b);
-                if a.is_err() || b.is_err() {
-                    continue;
-                }
-
-                let (mut body_a, mut transform_a) = a.unwrap();
-                let (mut body_b, mut transform_b) = b.unwrap();
-
-                resolve_contact(
-                    contact,
-                    &mut body_a,
-                    &mut transform_a,
-                    &mut body_b,
-                    &mut transform_b,
-                );
+    for contact in contacts.iter() {
+        unsafe {
+            let a = query.get_unchecked(contact.entity_a);
+            let b = query.get_unchecked(contact.entity_b);
+            if a.is_err() || b.is_err() {
+                continue;
             }
-        }
 
-        // Apply ballistic impulses
-        for (mut body, mut transform) in query.iter_mut() {
-            body.update(&mut transform, pt.time)
+            let (mut body_a, mut transform_a) = a.unwrap();
+            let (mut body_b, mut transform_b) = b.unwrap();
+
+            resolve_contact(
+                contact,
+                &mut body_a,
+                &mut transform_a,
+                &mut body_b,
+                &mut transform_b,
+            );
         }
     }
 
-    #[cfg(feature = "dynamic")]
-    {
-        // sort the times of impact from earliest to latest
-        let mut list = contacts.iter().collect::<Vec<_>>();
+    // Apply ballistic impulses
+    for (mut body, mut transform) in query.iter_mut() {
+        body.update(&mut transform, pt.time)
+    }
+}
 
-        info!("contats: {}", list.len());
-        list.sort_unstable_by(|a, b| a.time_of_impact.partial_cmp(&b.time_of_impact).unwrap());
+pub fn resolve_contact_system_dynamic(
+    pt: Res<PhysicsTime>,
+    mut query: Query<(&mut Body, &mut GlobalTransform)>,
+    mut contacts: EventReader<Contact>,
+) {
+    // sort the times of impact from earliest to latest
+    let mut list = contacts.iter().collect::<Vec<_>>();
 
-        // Apply Ballistic impulses
-        let mut accumulated_time = 0.0;
-        for contact in list.iter() {
-            let contact_time = contact.time_of_impact - accumulated_time;
+    info!("contats: {}", list.len());
+    list.sort_unstable_by(|a, b| a.time_of_impact.partial_cmp(&b.time_of_impact).unwrap());
 
-            // position update
-            for (mut body, mut transform) in query.iter_mut() {
-                body.update(&mut transform, contact_time);
-            }
+    // Apply Ballistic impulses
+    let mut accumulated_time = 0.0;
+    for contact in list.iter() {
+        let contact_time = contact.time_of_impact - accumulated_time;
 
-            unsafe {
-                let (mut body_a, mut transform_a) = query.get_unchecked(contact.entity_a).unwrap();
-                let (mut body_b, mut transform_b) = query.get_unchecked(contact.entity_b).unwrap();
-                resolve_contact(
-                    contact,
-                    &mut body_a,
-                    &mut transform_a,
-                    &mut body_b,
-                    &mut transform_b,
-                );
-            }
-            accumulated_time += contact_time;
+        // position update
+        for (mut body, mut transform) in query.iter_mut() {
+            body.update(&mut transform, contact_time);
         }
 
-        //update positions for the rest of this frame's time
-        let time_remaining = pt.time - accumulated_time;
-        if time_remaining > 0.0 {
-            for (mut body, mut transform) in query.iter_mut() {
-                body.update(&mut transform, time_remaining)
-            }
+        unsafe {
+            let (mut body_a, mut transform_a) = query.get_unchecked(contact.entity_a).unwrap();
+            let (mut body_b, mut transform_b) = query.get_unchecked(contact.entity_b).unwrap();
+            resolve_contact(
+                contact,
+                &mut body_a,
+                &mut transform_a,
+                &mut body_b,
+                &mut transform_b,
+            );
+        }
+        accumulated_time += contact_time;
+    }
+
+    //update positions for the rest of this frame's time
+    let time_remaining = pt.time - accumulated_time;
+    if time_remaining > 0.0 {
+        for (mut body, mut transform) in query.iter_mut() {
+            body.update(&mut transform, time_remaining)
         }
     }
 }
