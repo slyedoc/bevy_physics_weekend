@@ -18,15 +18,18 @@ trace = [
 bevy = { version = "0.6.0", default-features = false, features = [
     "bevy_render",
 ] }
-bevy-inspector-egui = { version = "0.7.1" }
+bevy-inspector-egui = { version = "0.7.6" }
 bevy_polyline = "0.1"
-rayon = "1.5.1"
+#bevy_mod_bounding = { path = "../bevy_mod_bounding" }
+#bevy = { git = "https://github.com/bevyengine/bevy", branch = "main" }
+
+
+# rayon = "1.5.1"
 
 [dev-dependencies]
 bevy = { version = "0.6.0", default-features = true }
 bevy-inspector-egui = { version = "0.7.1" }
 bevy_rapier3d = { git = "https://github.com/dimforge/bevy_rapier", branch = "master" }
 
-
-#[patch.crates-io]
-#bevy = { git = "https://github.com/bevyengine/bevy", branch = "main" }
+[patch.crates-io]
+#bevy_mod_bounding = { git = "https://github.com/slyedoc/bevy_mod_bounding", branch = "master" }

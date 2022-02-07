@@ -2,33 +2,34 @@ pub mod camera_controller;
 pub mod editor;
 pub mod fps;
 pub mod reset;
-pub mod stack_config;
 
-use bevy::{prelude::*, app::AppExit};
+use bevy::prelude::*;
 use bevy_inspector_egui::InspectorPlugin;
 
-use bevy_physics_weekend::debug_render::PhysicsReport;
+use bevy_physics_weekend::{debug::PhysicsReport, PhysicsConfig};
 pub use camera_controller::*;
 pub use editor::*;
 pub use fps::*;
 pub use reset::*;
-pub use stack_config::*;
 
 pub struct HelperPlugin;
 
 impl Plugin for HelperPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(EditorPlugin)
-        .add_plugin(CameraControllerPlugin)
-        .add_plugin(ResetPlugin)
-        .add_plugin(FPSPlugin)
-        .add_plugin(InspectorPlugin::<PhysicsReport>::new());
+            .add_plugin(CameraControllerPlugin)
+            .add_plugin(ResetPlugin)
+            .add_plugin(FPSPlugin)
+            .add_plugin(InspectorPlugin::<PhysicsReport>::new())
+            .add_plugin(InspectorPlugin::<PhysicsConfig>::new());
 
         #[cfg(feature = "timeout")]
         app.add_system(timeout_system);
     }
 }
 
+#[cfg(feature = "timeout")]
+use bevy::app::AppExit;
 #[cfg(feature = "timeout")]
 /// This system will exit the app after 5 secs timeout, used for pref tests
 pub fn timeout_system(time: Res<Time>, mut quit: EventWriter<AppExit>) {
@@ -37,6 +38,7 @@ pub fn timeout_system(time: Res<Time>, mut quit: EventWriter<AppExit>) {
     }
 }
 
+#[allow(dead_code)]
 pub fn spawn_light(commands: &mut Commands) {
     const HALF_SIZE: f32 = 50.0;
     commands
@@ -65,4 +67,3 @@ pub fn spawn_light(commands: &mut Commands) {
         })
         .insert(Name::new("Light"));
 }
-

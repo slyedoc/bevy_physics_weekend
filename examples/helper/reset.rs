@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_physics_weekend::PhysicsSystem;
+use bevy_physics_weekend::Physics;
 
 pub struct ResetPlugin;
 
@@ -14,7 +14,7 @@ impl Plugin for ResetPlugin {
             .add_startup_system(setup)
             .add_system_to_stage(
                 CoreStage::PreUpdate,
-                reset_level.after(PhysicsSystem::First),
+                reset_level.before(Physics::PreUpdate),
             );
     }
 }
@@ -33,7 +33,7 @@ fn reset_level(
 ) {
     if input.just_pressed(KeyCode::R) {
         for e in q.iter() {
-            commands.entity(e).despawn();
+            commands.entity(e).despawn_recursive();
         }
         ev_reset.send(ResetEvent);
     }

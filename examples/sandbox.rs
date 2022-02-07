@@ -1,11 +1,11 @@
 mod helper;
 use bevy::prelude::*;
-use bevy_inspector_egui::InspectorPlugin;
-use bevy_physics_weekend::{primitives::Body, PhysicsConfig, PhysicsPlugin, colliders::{ColliderSphere, ColliderBox}};
+use bevy_physics_weekend::{primitives::Body, PhysicsPlugin, colliders::{ColliderSphere, ColliderBox}, debug::PhysicsDebugPlugin};
 use helper::HelperPlugin;
 
 fn main() {
     App::new()
+        .insert_resource(Msaa { samples: 4 })
         .insert_resource(WindowDescriptor {
             title: "Physics Sandbox".to_string(),
             vsync: false, // just for testing
@@ -13,9 +13,11 @@ fn main() {
         })
         .add_plugins(DefaultPlugins)
         .add_plugin(HelperPlugin)
-        .add_plugin(InspectorPlugin::<PhysicsConfig>::new())
+        
         // our plugin
         .add_plugin(PhysicsPlugin)
+        .add_plugin(PhysicsDebugPlugin)
+
         .add_startup_system(setup)
         .add_system(setup_level)
         .run();
@@ -51,6 +53,7 @@ fn setup_level(
                     friction: 0.5,
                     ..Default::default()
                 })
+                //.insert(Bounded::<aabb::Aabb>::default())
                 .insert(ColliderSphere::new(1.0))
                 .insert(helper::Reset)
                 .insert(Name::new("Sphere"));
@@ -73,6 +76,7 @@ fn setup_level(
                 friction: 0.5,
                 ..Default::default()
             })
+            //.insert(Bounded::<aabb::Aabb>::default())
             .insert(ColliderBox::from(Vec3::ONE))
             .insert(helper::Reset)
             .insert(Name::new("Box"));
@@ -97,28 +101,25 @@ fn setup(
     helper::spawn_light(&mut commands);
 
     //Ground
-    let ground_radius = 1000.0;
     commands
         .spawn_bundle(PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::UVSphere {
-                radius: ground_radius,
-                sectors: 60,
-                stacks: 60,
-            })),
-            transform: Transform::from_xyz(0.0, -ground_radius - 1.0, 0.0),
+            mesh: meshes.add(Mesh::from(shape::Box::new(100.0, 1.0, 100.0))),
+            transform: Transform::from_xyz(0.0,  -0.5, 0.0),
             material: materials.add(StandardMaterial {
                 base_color: Color::GREEN,
                 ..Default::default()
             }),
             ..Default::default()
         })
+
         .insert(Body {
             inv_mass: 0.0,
             friction: 0.5,
             elasticity: 0.5,
             ..Default::default()
         })
-        .insert(ColliderSphere::new(ground_radius))
+        //.insert(Bounded::<aabb::Aabb>::default())
+        .insert(ColliderBox::from(Vec3::new(100.0, 1.0, 100.0)))
         .insert(Name::new("Ground"));
 
     // /*

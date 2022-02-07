@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    colliders::{ColliderSphere, ColliderType, ColliderBox},
+    colliders::{ColliderBox, ColliderSphere, ColliderType, Collider},
     intersect,
     primitives::*,
 };
@@ -54,34 +54,46 @@ pub fn narrowphase_system_static(
                     }
                 }
                 (ColliderType::Sphere, ColliderType::Box) => {
-                    let sphere_a = spheres.get_unchecked(pair.a).unwrap();
-                    let box_b = boxes.get_unchecked(pair.b).unwrap();
-                    const BIAS: f32 = 0.001;
-                    if let Some((mut world_point_a, mut world_point_b)) =
-                        intersect::gjk_does_intersect(sphere_a, trans_a, box_b, trans_b, BIAS)
-                    {
-                        let normal = (world_point_b - world_point_a).normalize_or_zero();
-                        world_point_a -= normal * BIAS;
-                        world_point_b += normal * BIAS;
-
-                        contacts.send(Contact {
-                                entity_a: pair.a,
-                                entity_b: pair.b,
-                                world_point_a,
-                                world_point_b,
-                                local_point_a: body_a.world_to_local(trans_a, world_point_a),
-                                local_point_b: body_b.world_to_local(trans_b, world_point_b),
-                                normal,
-                                separation_dist: -(world_point_a - world_point_b).length(),
-                                time_of_impact: 0.0,
-                            });
-                    }
+                        let sphere_a = spheres.get_unchecked(pair.a).unwrap();
+                        let box_b = boxes.get_unchecked(pair.b).unwrap();
+                        gjk_intersect(pair, sphere_a, box_b, trans_a, trans_b, body_a, body_b, &mut contacts);
                 }
-                (ColliderType::Box, ColliderType::Sphere) => todo!(),
+                (ColliderType::Box, ColliderType::Sphere) => {
+                    let box_a = boxes.get_unchecked(pair.a).unwrap();
+                    let sphere_b = spheres.get_unchecked(pair.b).unwrap();
+                    gjk_intersect(pair, box_a, sphere_b, trans_a, trans_b, body_a, body_b, &mut contacts);
+                }
+                (ColliderType::Box, ColliderType::Box) => {
+                    let box_a = boxes.get_unchecked(pair.a).unwrap();
+                    let box_b = boxes.get_unchecked(pair.b).unwrap();
+                    gjk_intersect(pair, box_a, box_b, trans_a, trans_b, body_a, body_b, &mut contacts);
+                }
                 (_, _) => todo!(),
-
             }
         }
+    }
+}
+
+fn gjk_intersect(pair: &BroadContact, collider_a: &impl Collider, collider_b: &impl Collider, trans_a: &GlobalTransform, trans_b: &GlobalTransform, body_a: &Body, body_b: &Body,  contacts: &mut EventWriter<Contact> ) {
+    const BIAS: f32 = 0.001;
+    if let Some((mut world_point_a, mut world_point_b)) =
+        intersect::gjk_does_intersect(collider_a, trans_a, collider_b, trans_b, BIAS)
+    {
+        let normal = (world_point_b - world_point_a).normalize_or_zero();
+        world_point_a -= normal * BIAS;
+        world_point_b += normal * BIAS;
+
+        contacts.send(Contact {
+            entity_a: pair.a,
+            entity_b: pair.b,
+            world_point_a,
+            world_point_b,
+            local_point_a: body_a.world_to_local(trans_a, world_point_a),
+            local_point_b: body_b.world_to_local(trans_b, world_point_b),
+            normal,
+            separation_dist: -(world_point_a - world_point_b).length(),
+            time_of_impact: 0.0,
+        });
     }
 }
 
@@ -223,3 +235,4 @@ pub fn narrowphase_system_dynamic(
         }
     }
 }
+

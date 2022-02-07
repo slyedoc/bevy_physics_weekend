@@ -1,4 +1,4 @@
-use crate::primitives::Aabb;
+use crate::bounds::aabb::Aabb;
 
 
 // Separating Axis Test
@@ -6,24 +6,24 @@ use crate::primitives::Aabb;
 // then the two AABBs do not intersect
 #[inline]
 pub fn aabb_aabb_intersect(a: &Aabb, b: &Aabb) -> bool {
-    if a.mins.x >= b.maxs.x {
+    if a.minimums().x >= b.maximums().x {
         return false;
     }
-    if a.maxs.x <= b.mins.x {
-        return false;
-    }
-
-    if a.mins.y >= b.maxs.y {
-        return false;
-    }
-    if a.maxs.y <= b.mins.y {
+    if a.maximums().x <= b.minimums().x {
         return false;
     }
 
-    if a.mins.z >= b.maxs.z {
+    if a.minimums().y >= b.maximums().y {
         return false;
     }
-    if a.maxs.z <= b.mins.z {
+    if a.maximums().y <= b.minimums().y {
+        return false;
+    }
+
+    if a.minimums().z >= b.maximums().z {
+        return false;
+    }
+    if a.maximums().z <= b.minimums().z {
         return false;
     }
 

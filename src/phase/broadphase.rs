@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{primitives::*, intersect};
+use crate::{primitives::*, intersect, bounds::aabb::Aabb};
 
 // The board phase is responsible for pruning the search space of possable collisions
 // I have tried different approaches, and I am sure I will try a few more
@@ -8,11 +8,15 @@ use crate::{primitives::*, intersect};
 // TODO: Figure out way to search two axis thats actually faster or bite the bullet and try some space partitioning
 pub fn broadphase_system(
     mut broad_contacts: EventWriter<BroadContact>,
-    query: Query<(Entity, &Aabb)>,
+    query: Query<(Entity, &Aabb, &GlobalTransform)>,
 ) {
     // TODO: Yes, we are copying the array out here, only way to sort it
     // Ideally we would keep the array around, it should already near sorted
-    let mut list = query.iter().collect::<Vec<_>>();
+    let mut list = query.iter()
+        .map(|(e, aabb, t)| {
+             (e, Aabb::from_extents(t.translation + aabb.minimums(), t.translation + aabb.maximums()) )
+        })
+        .collect::<Vec<_>>();
     
     // Sort the array on currently selected sorting axis
     list.sort_unstable_by(cmp_x_axis);
@@ -22,7 +26,7 @@ pub fn broadphase_system(
         // Test collisions against all possible overlapping AABBs following current one
         for (b, aabb_b) in list.iter().skip(i + 1) {
             // Stop when tested AABBs are beyond the end of current AABB
-            if aabb_b.mins.x > aabb_a.maxs.x {
+            if aabb_b.minimums().x > aabb_a.maximums().x {
                 break;
             }
             if intersect::aabb_aabb_intersect(aabb_a, aabb_b) {
@@ -33,10 +37,10 @@ pub fn broadphase_system(
     }
 }
 
-fn cmp_x_axis( a: &(Entity, &Aabb), b: &(Entity, &Aabb)) -> std::cmp::Ordering {
+fn cmp_x_axis( a: &(Entity, Aabb), b: &(Entity, Aabb)) -> std::cmp::Ordering {
     // Sort on minimum value along either x, y, or z axis
-    let min_a = a.1.mins.x;
-    let min_b = b.1.mins.x;
+    let min_a = a.1.minimums().x;
+    let min_b = b.1.minimums().x;
     if min_a < min_b {
         return std::cmp::Ordering::Less;
     }
@@ -46,10 +50,10 @@ fn cmp_x_axis( a: &(Entity, &Aabb), b: &(Entity, &Aabb)) -> std::cmp::Ordering {
     std::cmp::Ordering::Equal
 }
 
-fn cmp_y_axis( a: &(Entity, &Aabb), b: &(Entity, &Aabb)) -> std::cmp::Ordering {
+fn cmp_y_axis( a: &(Entity, Aabb), b: &(Entity, Aabb)) -> std::cmp::Ordering {
     // Sort on minimum value along either x, y, or z axis
-    let min_a = a.1.mins.y;
-    let min_b = b.1.mins.y;
+    let min_a = a.1.minimums().y;
+    let min_b = b.1.minimums().y;
     if min_a < min_b {
         return std::cmp::Ordering::Less;
     }
@@ -59,10 +63,10 @@ fn cmp_y_axis( a: &(Entity, &Aabb), b: &(Entity, &Aabb)) -> std::cmp::Ordering {
     std::cmp::Ordering::Equal
 }
 
-fn cmp_z_axis( a: &(Entity, &Aabb), b: &(Entity, &Aabb)) -> std::cmp::Ordering {
+fn cmp_z_axis( a: &(Entity, Aabb), b: &(Entity, Aabb)) -> std::cmp::Ordering {
     // Sort on minimum value along either x, y, or z axis
-    let min_a = a.1.mins.z;
-    let min_b = b.1.mins.z;
+    let min_a = a.1.minimums().z;
+    let min_b = b.1.minimums().z;
     if min_a < min_b {
         return std::cmp::Ordering::Less;
     }

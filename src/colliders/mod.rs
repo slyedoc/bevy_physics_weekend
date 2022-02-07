@@ -3,13 +3,13 @@ use bevy::{
     prelude::{ Component, GlobalTransform},
 };
 
-use crate::primitives::{Bounds, Aabb};
+use crate::bounds::Bounds;
 
 
 pub trait Collider {
     fn center_of_mass(&self) -> Vec3;
-    fn bounds(&self) -> Bounds;
-    fn aabb(&self, transform: &GlobalTransform) -> Aabb;
+    //fn bounds(&self) -> Bounds;
+   // fn aabb(&self, transform: &GlobalTransform) -> Aabb;
     fn support(&self, dir: Vec3, transform: &GlobalTransform, bias: f32) -> Vec3;
     fn fastest_linear_speed(&self, angular_velocity: Vec3, dir: Vec3) -> f32;
     fn shape_type(&self) -> ColliderType;
@@ -25,7 +25,7 @@ pub enum ColliderType {
 #[derive(Component)]
 pub struct ColliderSphere {
     pub radius: f32,
-    bounds: Bounds,
+    //bounds: Bounds,
     center_of_mass: Vec3,
     inertia_tensor: Mat3,
 }
@@ -35,10 +35,10 @@ impl ColliderSphere {
 
         Self {
             radius,
-            bounds: Bounds {
-                mins: Vec3::new(-radius, -radius, -radius),
-                maxs: Vec3::new(radius, radius, radius),
-            },
+            // bounds: Bounds {
+            //     mins: Vec3::new(-radius, -radius, -radius),
+            //     maxs: Vec3::new(radius, radius, radius),
+            // },
             center_of_mass: Vec3::new(0.0, 0.0, 0.0),
             inertia_tensor: Mat3::from_diagonal(Vec3::splat(2.0 * radius * radius / 5.0)),
         }
@@ -50,17 +50,16 @@ impl Collider for ColliderSphere {
         self.center_of_mass
     }
 
-    fn bounds(&self) -> Bounds {
-        self.bounds
-    }
+    // fn bounds(&self) -> Bounds {
+    //     self.bounds
+    // }
 
-    #[inline]
-    fn aabb(&self, trans: &GlobalTransform ) -> Aabb {
-        Aabb {
-            mins: self.bounds.mins + trans.translation,
-            maxs: self.bounds.maxs + trans.translation,
-        }
-    }
+    // fn aabb(&self, trans: &GlobalTransform ) -> Aabb {
+    //     Aabb {
+    //         mins: self.bounds.mins + trans.translation,
+    //         maxs: self.bounds.maxs + trans.translation,
+    //     }
+    // }
 
     fn support(&self, dir: Vec3, transform: &GlobalTransform, bias: f32) -> Vec3 {
         transform.translation + dir * (self.radius + bias)
@@ -77,7 +76,7 @@ impl Collider for ColliderSphere {
 
 #[derive(Component)]
 pub struct ColliderBox {
-    bounds: Bounds,
+    //bounds: Bounds,
     points: Vec<Vec3>,
     center_of_mass: Vec3,
     inertia_tensor: Mat3,
@@ -146,7 +145,7 @@ impl ColliderBox {
 
         Self {
             points,
-            bounds,
+            //bounds,
             center_of_mass,
             inertia_tensor: tensor + pat_tensor,
         }
@@ -171,18 +170,18 @@ impl Collider for ColliderBox {
         self.center_of_mass
     }
 
-    fn bounds(&self) -> Bounds {
-        self.bounds
-    }
+    // fn bounds(&self) -> Bounds {
+    //     self.bounds
+    // }
 
-    fn aabb(&self, transform: &GlobalTransform) -> Aabb {
-        Aabb {
-            mins: self.bounds.mins + transform.translation,
-            maxs: self.bounds.maxs + transform.translation,
-        }
+    // fn aabb(&self, transform: &GlobalTransform) -> Aabb {
+    //     Aabb {
+    //         mins: self.bounds.mins + transform.translation,
+    //         maxs: self.bounds.maxs + transform.translation,
+    //     }
         
         
-    }
+    // }
 
     // find the point in the furthest in direction
     fn support(&self, dir: Vec3, trans: &GlobalTransform, bias: f32) -> Vec3 {
