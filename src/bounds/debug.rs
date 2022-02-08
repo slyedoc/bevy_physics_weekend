@@ -101,15 +101,13 @@ impl From<&Aabb> for Mesh {
             .map(|vert| [vert.x, vert.y, vert.z])
             .collect();
 
-            
-            let mut normals = Vec::with_capacity(8);
-            let mut uvs = Vec::with_capacity(8);
+        let mut normals = Vec::with_capacity(8);
+        let mut uvs = Vec::with_capacity(8);
 
-
-            for _ in  0..8 {
-                normals.push([0.0, 0.0, 1.0]);
-                uvs.push([0.0, 0.0]);
-            }
+        for _ in 0..8 {
+            normals.push([0.0, 0.0, 1.0]);
+            uvs.push([0.0, 0.0]);
+        }
 
         let indices = Indices::U32(vec![
             0, 1, 1, 2, 2, 3, 3, 0, // Top ring
@@ -146,7 +144,7 @@ impl From<&Obb> for Mesh {
         let mut normals = Vec::with_capacity(8);
         let mut uvs = Vec::with_capacity(8);
 
-        for _ in  0..8 {
+        for _ in 0..8 {
             normals.push([0.0, 0.0, 1.0]);
             uvs.push([0.0, 0.0]);
         }
@@ -206,11 +204,10 @@ impl From<&BSphere> for Mesh {
         let mut normals = Vec::with_capacity(positions.len());
         let mut uvs = Vec::with_capacity(positions.len());
 
-        for _ in  0..positions.len() {
+        for _ in 0..positions.len() {
             normals.push([0.0, 0.0, 1.0]);
             uvs.push([0.0, 0.0]);
         }
-
 
         let indices_single: Vec<u32> = (0..n_points * 2)
             .map(|i| {

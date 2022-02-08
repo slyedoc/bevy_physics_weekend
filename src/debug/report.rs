@@ -10,8 +10,8 @@ pub struct PhysicsReport {
     #[inspectable()]
     bodies: usize,
     manifolds: usize,
-    collision_pairs: usize,
-    contacts: usize,
+    broad_contacts: usize,
+    narrow_contacts: usize,
     constraint: usize,
 }
 
@@ -27,7 +27,7 @@ pub fn report_system(
     report.time = pt.time;
     report.bodies = bodies.iter().count();
     report.manifolds = manifolds.iter().count();
-    report.collision_pairs = collision_pairs.iter().count();
-    report.contacts = contacts.iter().count();
+    report.broad_contacts = collision_pairs.iter().count();
+    report.narrow_contacts = contacts.iter().count();
     report.constraint = constraint_penetrations.iter().count();
 }

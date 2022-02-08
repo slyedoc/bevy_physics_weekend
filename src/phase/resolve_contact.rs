@@ -6,7 +6,7 @@ use crate::{
 
 use bevy::prelude::*;
 
-pub fn resolve_contact_system_static(
+pub fn resolve_contact_system(
     pt: Res<PhysicsTime>,
     mut query: Query<(&mut Body, &mut GlobalTransform)>,
     mut contacts: EventReader<Contact>,
@@ -38,7 +38,7 @@ pub fn resolve_contact_system_static(
     }
 }
 
-pub fn resolve_contact_system_dynamic(
+pub fn resolve_contact_system_ordered(
     pt: Res<PhysicsTime>,
     mut query: Query<(&mut Body, &mut GlobalTransform)>,
     mut contacts: EventReader<Contact>,
@@ -46,7 +46,6 @@ pub fn resolve_contact_system_dynamic(
     // sort the times of impact from earliest to latest
     let mut list = contacts.iter().collect::<Vec<_>>();
 
-    info!("contats: {}", list.len());
     list.sort_unstable_by(|a, b| a.time_of_impact.partial_cmp(&b.time_of_impact).unwrap());
 
     // Apply Ballistic impulses

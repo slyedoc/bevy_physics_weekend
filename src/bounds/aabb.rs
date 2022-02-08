@@ -13,12 +13,13 @@ pub struct Aabb {
     /// The coordinates of the point located at the minimum x, y, and z coordinate. This can also
     /// be thought of as the length of the -x, -y, -z axes that extend from the origin and touch
     /// the inside of the bounding box faces.
-    minimums: Vec3,
+    pub minimums: Vec3,
     /// The coordinates of the point located at the maximum x, y, and z coordinate. This can also
     /// be thought of as the length of the +x, +y, +z axes that extend from the origin and touch
     /// the inside of the bounding box faces.
-    maximums: Vec3,
+    pub maximums: Vec3,
 }
+
 impl Aabb {
     /// Returns the distance from the origin of the mesh to the negative extents of the bounding
     /// box in world space, aligned with the world axes. I.e.: distance from the mesh origin to the
@@ -32,6 +33,7 @@ impl Aabb {
     pub fn maximums(&self) -> Vec3 {
         self.maximums
     }
+
     /// Returns the vertices of the bounding box in world space, given the current mesh transform.
     pub fn vertices(&self, transform: GlobalTransform) -> [Vec3; 8] {
         let vertices_mesh_space = self.vertices_mesh_space();
@@ -82,6 +84,17 @@ impl Aabb {
         }
         Aabb { minimums, maximums }
     }
+
+    pub fn expand_velocity(&mut self, velocity: Vec3) {
+        let mins = self.minimums - velocity;
+        self.minimums = Vec3::select(mins.cmplt(self.minimums), mins, self.minimums);
+        self.maximums = Vec3::select(mins.cmpgt(self.maximums), mins, self.maximums);
+
+        let maxs = self.maximums + velocity;
+        self.minimums = Vec3::select(maxs.cmplt(self.minimums), maxs, self.minimums);
+        self.maximums = Vec3::select(maxs.cmpgt(self.maximums), maxs, self.maximums);
+    }
+
 }
 
 impl BoundingVolume for Aabb {
@@ -135,6 +148,10 @@ impl BoundingVolume for Aabb {
     fn update_on_transform_change(&self, mesh: &Mesh, transform: &GlobalTransform) -> Option<Self> {
         Some(Self::new(mesh, transform))
     }
+
+
+
+
 
     fn outside_plane(
         &self,

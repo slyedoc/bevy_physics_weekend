@@ -4,25 +4,26 @@
 #![feature(vec_retain_mut)]
 #![feature(div_duration)]
 
+pub mod bounds;
 pub mod colliders;
 pub mod constraints;
 pub mod debug;
 pub mod intersect;
-pub mod bounds;
 mod math;
 mod phase;
 pub mod primitives;
 
-use bounds::*;
+use bounds::{*, aabb::Aabb};
 use colliders::{Collider, ColliderBox, ColliderSphere};
 use primitives::*;
 
-use bevy::{ecs::schedule::ShouldRun, prelude::*};
+use bevy::{ecs::schedule::ShouldRun, prelude::*, transform::TransformSystem};
 use bevy_inspector_egui::Inspectable;
 use phase::*;
 
+/// Continuous Collision etection
 #[derive(Inspectable, PartialEq, Eq)]
-pub enum Mode {
+pub enum CollisionDetection {
     Static,
     Dynamic,
 }
@@ -35,7 +36,7 @@ pub enum DebugMode {
 #[derive(Component, Inspectable)]
 pub struct PhysicsConfig {
     pub enabled: bool,
-    pub mode: Mode,
+    pub collision_dection: CollisionDetection,
     #[inspectable(min = -10.0, max = 10.0)]
     pub time_dilation: f32,
     pub gravity: Vec3,
@@ -55,7 +56,7 @@ impl Default for PhysicsConfig {
             gravity: Vec3::new(0.0, -9.8, 0.0),
             constrain_max_iter: 5,
             time_dilation: 1.0,
-            mode: Mode::Static,
+            collision_dection: CollisionDetection::Static,
             debug_mode: DebugMode::Bounds,
         }
     }
@@ -75,7 +76,7 @@ pub enum PreUpdate {
     Second,
 }
 
-/// The names of egui systems.
+/// The names of system labels for run order
 #[derive(SystemLabel, Clone, Hash, Debug, Eq, PartialEq)]
 pub enum Update {
     Dynamics,
@@ -91,104 +92,98 @@ pub enum Update {
 pub struct PhysicsPlugin;
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(BoundingVolumePlugin::<aabb::Aabb>::default())
+        app
             .init_resource::<PhysicsConfig>()
             .init_resource::<PhysicsTime>()
             .add_event::<Contact>()
             .add_event::<BroadContact>()
             .add_event::<ManifoldContactEvent>()
             .add_system_set_to_stage(
-                CoreStage::PreUpdate,
+                CoreStage::PostUpdate,
                 SystemSet::new()
                     .label(Physics::PreUpdate)
+                    .after(TransformSystem::TransformPropagate)
                     .with_run_criteria(run_physics)
                     .with_system(update_time_system)
                     .with_system(added_collider::<ColliderSphere>.label(PreUpdate::First))
                     .with_system(added_collider::<ColliderBox>.label(PreUpdate::First))
-                    // .with_system(
-                    //     calucate_aabb::<ColliderSphere>
-                    //         .label(PreUpdate::Second)
-                    //         .after(PreUpdate::First),
-                    // )
-                    // .with_system(
-                    //     calucate_aabb::<ColliderBox>
-                    //         .label(PreUpdate::Second)
-                    //         .after(PreUpdate::First),
-                    // ),
+                    //.with_system(update_aabb.after(BoundingSystem::UpdateBounds)),
             )
+            // TODO: right now this uses the mesh instead of the collider
+            .add_plugin(BoundingVolumePlugin::<aabb::Aabb>::default())
             .add_system_set_to_stage(
-                CoreStage::PreUpdate,
+                CoreStage::PostUpdate,
                 SystemSet::new()
                     .label(Physics::Update)
                     .after(Physics::PreUpdate)
                     .with_run_criteria(run_physics)
                     .with_system(dynamics::dynamics_gravity_system.label(Update::Dynamics))
                     .with_system(
-                        broadphase::broadphase_system
+                        broad::broadphase_system
                             .label(Update::Broadphase)
                             .after(Update::Dynamics),
-                    ),
+                    )
+                    // Narrowphase Static and Dynamic collision detection would go here
+                    // they part of diffferent set since they use different run_criteria
+                    .with_system(
+                        //resolve_contact::resolve_contact_system_ordered
+                            resolve_contact::resolve_contact_system
+                            .label(Update::ResolveContact)
+                            .after(Update::Narrowphase),
+                    )
+                    .with_system(
+                        constraints::constraint_penetration::pre_solve_system
+                            .label(Update::ConstraintsPreSolve)
+                            .after(Update::ResolveContact),
+                    )
+                    .with_system(
+                        constraints::constraint_penetration::solve_system
+                            .label(Update::ConstraintsSolve)
+                            .after(Update::ConstraintsPreSolve),
+                    )
+                    .with_system(
+                        transform::update_local_tranform
+                            .label(Update::Transform)
+                            .after(Update::ConstraintsSolve),
+                    )
+                    // .add_system_set_to_stage(
+                    //     CoreStage::PreUpdate,
+                    //     SystemSet::new()
+                    //         .label(Physics::PostUpdate)
+                    //         .with_run_criteria(run_physics)
+                    //         .with_system(manifold_remove_expired_system),
+                    // );
+
             )
-            // Static Path
+            //TODO: Wish i could use run criteria on sub systems, but its not allowed
+            // Static Collision Detection
             .add_system_set_to_stage(
-                CoreStage::PreUpdate,
+                CoreStage::PostUpdate,
                 SystemSet::new()
                     .label(Physics::Update)
                     .after(Physics::PreUpdate)
                     .with_run_criteria(run_physics)
                     .with_run_criteria(run_static)
                     .with_system(
-                        narrowphase::narrowphase_system_static
+                        narrow::narrowphase_system_static
                             .label(Update::Narrowphase)
                             .after(Update::Broadphase),
-                    )
+                    ),
+            )
+            // Dynamic Collision Detection
+            .add_system_set_to_stage(
+                CoreStage::PostUpdate,
+                SystemSet::new()
+                    .label(Physics::Update)
+                    .after(Physics::PreUpdate)
+                    .with_run_criteria(run_physics)
+                    .with_run_criteria(run_dynamic)
                     .with_system(
-                        resolve_contact::resolve_contact_system_static
-                            .label(Update::ResolveContact)
-                            .after(Update::Narrowphase),
-                    )
-                    .with_system(
-                        transform::update_local_tranform
-                            .label(Update::Transform)
-                            .after(Update::ResolveContact),
+                        narrow::narrowphase_system_dynamic
+                            .label(Update::Narrowphase)
+                            .after(Update::Broadphase),
                     ),
             );
-        // // Dynamic Path
-        // .add_system_set_to_stage(
-        //     CoreStage::PreUpdate,
-        //     SystemSet::new()
-        //         .label(Physics::Update)
-        //         .after(Physics::PreUpdate)
-        //         .with_run_criteria(run_physics)
-        //         .with_run_criteria(run_dynamic)
-        //         .with_system(
-        //             narrowphase::narrowphase_system_dynamic
-        //                 .label(Update::Narrowphase)
-        //                 .after(Update::Broadphase),
-        //         )
-        //         .with_system(
-        //             resolve_contact::resolve_contact_system_dynamic
-        //                 .label(Update::ResolveContact)
-        //                 .after(Update::Narrowphase),
-        //         ),
-        // );
-        // .with_system(
-        //     constraints::constraint_penetration::pre_solve_system
-        //         .label(Update::ConstraintsPreSolve)
-        //         .after(Update::ResolveContact),
-        // )
-        // .with_system(
-        //     constraints::constraint_penetration::solve_system
-        //         .label(Update::ConstraintsPreSolve)
-        //         .after(Update::ResolveContact),
-        // ),
-        // .add_system_set_to_stage(
-        //     CoreStage::PreUpdate,
-        //     SystemSet::new()
-        //         .label(Physics::PostUpdate)
-        //         .with_run_criteria(run_physics)
-        //         .with_system(manifold_remove_expired_system),
-        // );
     }
 }
 
@@ -200,34 +195,22 @@ pub fn added_collider<T: Component + Collider>(
         commands
             .entity(e)
             .insert(collider.shape_type())
-            .insert(Bounded::<aabb::Aabb>::default());
+            .insert(Bounded::<Aabb>::default());
     }
 }
 
-// pub fn calucate_aabb<T: Component + Collider>(
-//     mut query: Query<(&GlobalTransform, &Body, &T, &mut Aabb)>,
-//     pt: Res<PhysicsTime>,
-//     config: Res<PhysicsConfig>,
-// ) {
-//     #[allow(unused)]
-//     for (trans, body, collider, mut aabb) in query.iter_mut() {
-//         // TODO: remove this copy and use
-//         let mut new_aabb = collider.aabb(trans);
+pub fn update_aabb(
+     mut query: Query<(&Body, &mut Aabb)>,
+     pt: Res<PhysicsTime>,
+) {
+    for (body, mut aabb) in query.iter_mut() {
+        // expand the bounds by the linear velocity
+        aabb.expand_velocity(body.linear_velocity * pt.time);
+        const BOUNDS_EPS: f32 = 0.01;
+        aabb.expand_velocity(Vec3::splat(BOUNDS_EPS));    
+    }
+}
 
-//         // expand the bounds by the linear velocity
-//         if config.mode == Mode::Dynamic {
-//             new_aabb.expand_by_point(new_aabb.mins + body.linear_velocity * pt.time);
-//             new_aabb.expand_by_point(new_aabb.maxs + body.linear_velocity * pt.time);
-//         }
-
-//         const BOUNDS_EPS: f32 = 0.01;
-//         new_aabb.expand_by_point(new_aabb.mins - Vec3::splat(BOUNDS_EPS));
-//         new_aabb.expand_by_point(new_aabb.maxs + Vec3::splat(BOUNDS_EPS));
-
-//         aabb.mins = new_aabb.mins;
-//         aabb.maxs = new_aabb.maxs;
-//     }
-// }
 
 fn run_physics(config: Res<PhysicsConfig>) -> ShouldRun {
     if config.time_dilation != 0.0 && config.enabled {
@@ -238,7 +221,7 @@ fn run_physics(config: Res<PhysicsConfig>) -> ShouldRun {
 }
 
 fn run_static(config: Res<PhysicsConfig>) -> ShouldRun {
-    if config.mode == Mode::Static {
+    if config.collision_dection == CollisionDetection::Static {
         ShouldRun::Yes
     } else {
         ShouldRun::No
@@ -246,7 +229,7 @@ fn run_static(config: Res<PhysicsConfig>) -> ShouldRun {
 }
 
 fn run_dynamic(config: Res<PhysicsConfig>) -> ShouldRun {
-    if config.mode == Mode::Dynamic {
+    if config.collision_dection == CollisionDetection::Dynamic {
         ShouldRun::Yes
     } else {
         ShouldRun::No

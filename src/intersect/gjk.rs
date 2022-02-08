@@ -197,8 +197,7 @@ fn signed_volume_1d(s1: Vec3, s2: Vec3) -> Vec2 {
 
     if (p > a && p < b) || (p > b && p < a) {
         // if p is between [a,b]
-        let lambdas = Vec2::new(c2 / mu_max, c1 / mu_max);
-        lambdas
+        Vec2::new(c2 / mu_max, c1 / mu_max)
     } else if (a <= b && p <= a) || (a >= b && p >= a) {
         // if p is on the far side of a
         Vec2::X
@@ -319,8 +318,7 @@ fn signed_volume_3d(s1: Vec3, s2: Vec3, s3: Vec3, s4: Vec3) -> Vec4 {
         && compare_signs(det_m, c4[3]) > 0
     {
         // If the barycentric coordinates put the origin inside the simplex, then return them
-        let lambdas = c4 * det_m.recip();
-        lambdas
+        c4 * det_m.recip()
     } else {
         // If we get here, then we need to project the origin onto the faces and determine the
         // closest one
@@ -433,6 +431,7 @@ fn sort_valids(simplex_points: &mut [Point; 4], lambdas: &mut Vec4) {
         if lambdas[i] == 0.0 {
             valids[i] = false;
         }
+
     }
 
     let mut valid_lambdas = Vec4::ZERO;

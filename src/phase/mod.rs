@@ -1,5 +1,5 @@
 pub mod dynamics;
-pub mod broadphase;
-pub mod narrowphase;
+pub mod broad;
+pub mod narrow;
 pub mod resolve_contact;
 pub mod transform;

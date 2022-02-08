@@ -13,7 +13,7 @@ impl Plugin for ResetPlugin {
         app.add_event::<ResetEvent>()
             .add_startup_system(setup)
             .add_system_to_stage(
-                CoreStage::PreUpdate,
+                CoreStage::PostUpdate,
                 reset_level.before(Physics::PreUpdate),
             );
     }

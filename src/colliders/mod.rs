@@ -5,7 +5,6 @@ use bevy::{
 
 use crate::bounds::Bounds;
 
-
 pub trait Collider {
     fn center_of_mass(&self) -> Vec3;
     //fn bounds(&self) -> Bounds;
@@ -25,7 +24,6 @@ pub enum ColliderType {
 #[derive(Component)]
 pub struct ColliderSphere {
     pub radius: f32,
-    //bounds: Bounds,
     center_of_mass: Vec3,
     inertia_tensor: Mat3,
 }
@@ -35,10 +33,6 @@ impl ColliderSphere {
 
         Self {
             radius,
-            // bounds: Bounds {
-            //     mins: Vec3::new(-radius, -radius, -radius),
-            //     maxs: Vec3::new(radius, radius, radius),
-            // },
             center_of_mass: Vec3::new(0.0, 0.0, 0.0),
             inertia_tensor: Mat3::from_diagonal(Vec3::splat(2.0 * radius * radius / 5.0)),
         }
@@ -76,7 +70,7 @@ impl Collider for ColliderSphere {
 
 #[derive(Component)]
 pub struct ColliderBox {
-    //bounds: Bounds,
+    bounds: Bounds,
     points: Vec<Vec3>,
     center_of_mass: Vec3,
     inertia_tensor: Mat3,
@@ -145,7 +139,7 @@ impl ColliderBox {
 
         Self {
             points,
-            //bounds,
+            bounds,
             center_of_mass,
             inertia_tensor: tensor + pat_tensor,
         }
@@ -162,6 +156,28 @@ impl ColliderBox {
         )
     }
 
+    pub fn new_half_xyz(x_length: f32, y_length: f32, z_length: f32) -> Self {
+        ColliderBox::new(
+            x_length,
+            -x_length,
+            y_length,
+            -y_length,
+            z_length,
+            -z_length,
+        )
+    }
+
+    pub fn new_half_vec3(pos: Vec3) -> Self {
+        ColliderBox::new(
+            pos.x,
+            -pos.x,
+            pos.y,
+            -pos.y,
+            pos.z,
+            -pos.z,
+        )
+    }
+
 }
 
 impl Collider for ColliderBox {
@@ -169,19 +185,6 @@ impl Collider for ColliderBox {
     fn center_of_mass(&self) -> Vec3 {
         self.center_of_mass
     }
-
-    // fn bounds(&self) -> Bounds {
-    //     self.bounds
-    // }
-
-    // fn aabb(&self, transform: &GlobalTransform) -> Aabb {
-    //     Aabb {
-    //         mins: self.bounds.mins + transform.translation,
-    //         maxs: self.bounds.maxs + transform.translation,
-    //     }
-        
-        
-    // }
 
     // find the point in the furthest in direction
     fn support(&self, dir: Vec3, trans: &GlobalTransform, bias: f32) -> Vec3 {

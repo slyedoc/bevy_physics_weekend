@@ -58,17 +58,18 @@ fn enter_play_system(
     info!("Reset");
 
     // Create the ground
+    let ground_half_extents = Vec3::new(50.0, 0.5, 50.0);
+    let ground_pos = Vec3::new(0.0, -ground_half_extents.y, 0.0);
     match config.engine {
         Engine::Crate => {
-            let ground_radius = 1000.0;
             commands
                 .spawn_bundle(PbrBundle {
-                    mesh: meshes.add(Mesh::from(shape::UVSphere {
-                        radius: ground_radius,
-                        sectors: 60,
-                        stacks: 60,
-                    })),
-                    transform: Transform::from_xyz(0.0, -ground_radius - 1.0, 0.0),
+                    mesh: meshes.add(Mesh::from(shape::Box::new(
+                        ground_half_extents.x * 2.0,
+                        ground_half_extents.y * 2.0,
+                        ground_half_extents.z * 2.0,
+                    ))),
+                    transform: Transform::from_translation(ground_pos),
                     material: materials.add(StandardMaterial {
                         base_color: Color::GREEN,
                         ..Default::default()
@@ -78,29 +79,22 @@ fn enter_play_system(
                 .insert(Body {
                     inv_mass: 0.0,
                     friction: 0.2,
-                    elasticity: 1.0,
+                    elasticity: 0.9,
                     ..Default::default()
                 })
-                .insert(ColliderSphere::new(ground_radius))
+                .insert(ColliderBox::new_half_vec3(ground_half_extents))
                 .insert(Reset)
                 .insert(Name::new("Ground"));
         }
         Engine::Rapier => {
-            let ground_size = 200.0;
-            let ground_height = 10.0;
-            let ground_pos = Vec3::new(0.0, -ground_height, 0.0);
             commands
-                .spawn()
-                .insert_bundle(PbrBundle {
+                .spawn_bundle(PbrBundle {
                     transform: Transform::from_translation(ground_pos),
-                    mesh: meshes.add(Mesh::from(shape::Box {
-                        min_x: -ground_size,
-                        max_x: ground_size,
-                        min_y: -ground_height,
-                        max_y: ground_height,
-                        min_z: -ground_size,
-                        max_z: ground_size,
-                    })),
+                    mesh: meshes.add(Mesh::from(shape::Box::new(
+                        ground_half_extents.x * 2.0,
+                        ground_half_extents.y * 2.0,
+                        ground_half_extents.z * 2.0,
+                    ))),
                     material: materials.add(StandardMaterial {
                         base_color: Color::GREEN,
                         ..Default::default()
@@ -108,7 +102,12 @@ fn enter_play_system(
                     ..Default::default()
                 })
                 .insert_bundle(ColliderBundle {
-                    shape: ColliderShape::cuboid(ground_size, ground_height, ground_size).into(),
+                    shape: ColliderShape::cuboid(
+                        ground_half_extents.x,
+                        ground_half_extents.y,
+                        ground_half_extents.z,
+                    )
+                    .into(),
                     position: ground_pos.into(),
                     ..ColliderBundle::default()
                 })
@@ -254,7 +253,7 @@ impl FromWorld for StackConfig {
 
         Self {
             shape: Shape::Sphere,
-            count: 2000,
+            count: 200,
             base_size: 10,
             grid_offset: 1.0,
             ball_material: materials.add(StandardMaterial {

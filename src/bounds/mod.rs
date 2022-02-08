@@ -6,11 +6,11 @@ pub mod debug;
 pub mod obb;
 pub mod sphere;
 
-use std::ops::{Add, AddAssign};
 use bevy::{prelude::*, transform::TransformSystem};
 use debug::{update_debug_mesh_visibility, update_debug_meshes};
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::ops::{Add, AddAssign};
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, SystemLabel)]
 pub enum BoundingSystem {
@@ -85,6 +85,7 @@ pub trait BoundingVolume {
     ) -> Option<Self>
     where
         Self: Sized;
+
     /// Returns true if the bounding mesh is entirely on the outside of the supplied plane.
     /// "Outside" is the direction that the plane normal points to.
     fn outside_plane(
@@ -148,12 +149,11 @@ fn update<T: 'static + BoundingVolume + Send + Sync + Component>(
     }
 }
 
-
 /// A bounding volume for object in local space
 #[derive(Component, Copy, Clone, Debug, PartialEq)]
 pub struct Bounds {
-     pub mins: Vec3,
-     pub maxs: Vec3,
+    pub mins: Vec3,
+    pub maxs: Vec3,
 }
 
 impl Default for Bounds {
@@ -166,7 +166,6 @@ impl Default for Bounds {
 }
 
 impl Bounds {
-
     pub fn from_points(pts: &[Vec3]) -> Self {
         pts.iter().fold(Bounds::default(), |acc, pt| acc + *pt)
     }
