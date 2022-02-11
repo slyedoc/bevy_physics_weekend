@@ -19,7 +19,7 @@ impl Point {
     }
 }
 
-pub fn gjk_does_intersect(collider_a: &dyn Collider, transform_a: &GlobalTransform, collider_b: &dyn Collider, transform_b: &GlobalTransform, bias: f32) -> Option<(Vec3, Vec3)> {
+pub fn gjk_does_intersect(collider_a: &impl Collider, transform_a: &GlobalTransform, collider_b: &impl Collider, transform_b: &GlobalTransform, bias: f32) -> Option<(Vec3, Vec3)> {
     const ORIGIN: Vec3 = Vec3::ZERO;
 
     let mut num_pts = 1;
@@ -49,7 +49,6 @@ pub fn gjk_does_intersect(collider_a: &dyn Collider, transform_a: &GlobalTransfo
         if simple_signed_volumes(&simplex_points, num_pts, &mut new_dir, &mut lambdas) {
             break;
         }
-
 
         // Check that the new projection of the origin onto the simplex is closer than the previous
         let dist = new_dir.length_squared();
@@ -121,9 +120,9 @@ pub fn gjk_does_intersect(collider_a: &dyn Collider, transform_a: &GlobalTransfo
 }
 
 
-pub fn gjk_closest_points(collider_a: &dyn Collider, transform_a: &GlobalTransform, collider_b: &dyn Collider, transform_b: &GlobalTransform) -> (Vec3, Vec3) {
+pub fn gjk_closest_points(collider_a: &impl Collider, transform_a: &GlobalTransform, collider_b: &impl Collider, transform_b: &GlobalTransform) -> (Vec3, Vec3) {
     let mut closest_dist = f32::MAX;
-    const BIAS: f32 = 0.0;
+    const BIAS: f32 = 0.01;
 
     let mut num_pts = 1;
 
@@ -347,7 +346,7 @@ fn signed_volume_3d(s1: Vec3, s2: Vec3, s3: Vec3, s4: Vec3) -> Vec4 {
     }
 }
 
-fn support(collider_a: &dyn Collider, transform_a: &GlobalTransform, collider_b: &dyn Collider, transform_b: &GlobalTransform, dir: Vec3, bias: f32) -> Point {
+fn support(collider_a: &impl Collider, transform_a: &GlobalTransform, collider_b: &impl Collider, transform_b: &GlobalTransform, dir: Vec3, bias: f32) -> Point {
     let dir = dir.normalize();
 
     // Find the point in A furthest direction
@@ -463,16 +462,15 @@ fn num_valids(lambdas: &Vec4) -> usize {
 }
 
 fn epa_expand(
-    collider_a: &dyn Collider,
+    collider_a: &impl Collider,
     transform_a: &GlobalTransform,
-    collider_b: &dyn Collider,
+    collider_b: &impl Collider,
     transform_b: &GlobalTransform,
     bias: f32,
     simplex_points: &[Point; 4],
 ) -> (Vec3, Vec3) {
     let mut points = Vec::new();
     let mut triangles = Vec::new();
-
 
     let mut center = Vec3::ZERO;
     for &simplex_point in simplex_points {
@@ -552,8 +550,14 @@ fn epa_expand(
         }
     }
 
-    // Get the projection of the origin on the closest triangle
-    let tri = closest_triangle(&triangles, &points).unwrap();
+   // Get the projection of the origin on the closest triangle
+    let tri_option = closest_triangle(&triangles, &points);
+    if tri_option.is_none() {
+        // This should never happen
+        panic!("EPA: No closest triangle found");
+    }
+    let tri = tri_option.unwrap();
+
     let pt_a = &points[tri.a as usize];
     let pt_b = &points[tri.b as usize];
     let pt_c = &points[tri.c as usize];

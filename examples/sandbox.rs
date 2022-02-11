@@ -1,6 +1,11 @@
 mod helper;
 use bevy::prelude::*;
-use bevy_physics_weekend::{primitives::Body, PhysicsPlugin, colliders::{ColliderSphere, ColliderBox}, debug::PhysicsDebugPlugin};
+use bevy_physics_weekend::{
+    colliders::{ColliderBox, ColliderSphere},
+    debug::PhysicsDebugPlugin,
+    primitives::Body,
+    PhysicsPlugin,
+};
 use helper::HelperPlugin;
 
 fn main() {
@@ -13,11 +18,9 @@ fn main() {
         })
         .add_plugins(DefaultPlugins)
         .add_plugin(HelperPlugin)
-        
         // our plugin
         .add_plugin(PhysicsPlugin)
         .add_plugin(PhysicsDebugPlugin)
-
         .add_startup_system(setup)
         .add_system(setup_level)
         .run();
@@ -65,7 +68,30 @@ fn setup_level(
                 transform: Transform::from_xyz(0.0, 2.0, -5.0),
                 mesh: meshes.add(shape_box.into()),
                 material: materials.add(StandardMaterial {
-                    base_color: Color::RED,
+                    base_color: Color::rgba(1.0, 1.0, 1.0, 0.5),
+                    alpha_mode: AlphaMode::Blend,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            })
+            .insert(Body {
+                inv_mass: 1.0,
+                elasticity: 0.9,
+                friction: 0.5,
+                ..Default::default()
+            })
+            //.insert(Bounded::<aabb::Aabb>::default())
+            .insert(ColliderBox::from(Vec3::ONE))
+            .insert(helper::Reset)
+            .insert(Name::new("Box"));
+
+        commands
+            .spawn_bundle(PbrBundle {
+                transform: Transform::from_xyz(0.0, 3.0, -5.0),
+                mesh: meshes.add(shape_box.into()),
+                material: materials.add(StandardMaterial {
+                    base_color: Color::rgba(1.0, 1.0, 1.0, 0.5),
+                    alpha_mode: AlphaMode::Blend,
                     ..Default::default()
                 }),
                 ..Default::default()
@@ -104,14 +130,13 @@ fn setup(
     commands
         .spawn_bundle(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Box::new(100.0, 1.0, 100.0))),
-            transform: Transform::from_xyz(0.0,  -0.5, 0.0),
+            transform: Transform::from_xyz(0.0, -0.5, 0.0),
             material: materials.add(StandardMaterial {
                 base_color: Color::GREEN,
                 ..Default::default()
             }),
             ..Default::default()
         })
-
         .insert(Body {
             inv_mass: 0.0,
             friction: 0.5,

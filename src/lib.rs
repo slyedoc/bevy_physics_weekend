@@ -105,8 +105,8 @@ impl Plugin for PhysicsPlugin {
                     .after(TransformSystem::TransformPropagate)
                     .with_run_criteria(run_physics)
                     .with_system(update_time_system)
-                    .with_system(added_collider::<ColliderSphere>.label(PreUpdate::First))
-                    .with_system(added_collider::<ColliderBox>.label(PreUpdate::First))
+                    .with_system(spawn_sphere.label(PreUpdate::First))
+                    .with_system(spawn_box.label(PreUpdate::First))
                     //.with_system(update_aabb.after(BoundingSystem::UpdateBounds)),
             )
             // TODO: right now this uses the mesh instead of the collider
@@ -187,17 +187,59 @@ impl Plugin for PhysicsPlugin {
     }
 }
 
-pub fn added_collider<T: Component + Collider>(
+pub fn spawn_sphere(
     mut commands: Commands,
-    query: Query<(Entity, &T), Added<T>>,
+    mut query: Query<(Entity, &ColliderSphere, &mut Body), Added<ColliderSphere>>,
 ) {
-    for (e, collider) in query.iter() {
+    for (e, sphere, mut body) in query.iter_mut() {
         commands
             .entity(e)
-            .insert(collider.shape_type())
+            .insert(sphere.shape_type())
             .insert(Bounded::<Aabb>::default());
+
+        body.center_of_mass = Vec3::ZERO;
+        body.inertia_tensor = Mat3::from_diagonal(Vec3::splat(2.0 * sphere.radius * sphere.radius / 5.0))
     }
 }
+
+pub fn spawn_box(
+    mut commands: Commands,
+    mut query: Query<(Entity, &ColliderBox, &mut Body), Added<ColliderBox>>,
+) {
+    for (e, b, mut body) in query.iter_mut() {
+        commands
+            .entity(e)
+            .insert(b.shape_type())
+            .insert(Bounded::<Aabb>::default());
+
+    
+            // inertia tensor for box centered around zero
+            let d = b.bounds.maxs - b.bounds.mins;
+    
+            let dd = d * d;
+            let diagonal = Vec3::new(dd.y + dd.z, dd.x + dd.z, dd.x + dd.y) / 12.0;
+            let tensor = Mat3::from_diagonal(diagonal);
+    
+            // now we need to use the parallel axis theorem to get the ineria tensor for a box that is
+            // not centered around the origin
+    
+            let center_of_mass = (b.bounds.maxs + b.bounds.mins) * 0.5;
+    
+            // the displacement from the center of mass to the origin
+            let r = -center_of_mass;
+            let r2 = r.length_squared();
+    
+            let pat_tensor = Mat3::from_cols(
+                Vec3::new(r2 - r.x * r.x, r.x * r.y, r.x * r.z),
+                Vec3::new(r.y * r.x, r2 - r.y * r.y, r.y * r.z),
+                Vec3::new(r.z * r.x, r.z * r.y, r2 - r.z * r.z),
+            );
+
+            body.center_of_mass = center_of_mass;
+            body.inertia_tensor = tensor + pat_tensor
+    }
+}
+
 
 pub fn update_aabb(
      mut query: Query<(&Body, &mut Aabb)>,
@@ -239,5 +281,5 @@ fn run_dynamic(config: Res<PhysicsConfig>) -> ShouldRun {
 fn update_time_system(time: Res<Time>, config: Res<PhysicsConfig>, mut pt: ResMut<PhysicsTime>) {
     // NOTE: I am avoiding using fixed time, thats because
     // we want to develop the hot path of the physics system
-    pt.time = time.delta_seconds() * config.time_dilation;
+    pt.time =  (time.delta_seconds() * config.time_dilation).clamp(0.0, 0.05);
 }

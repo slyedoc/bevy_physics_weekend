@@ -1,6 +1,6 @@
 mod report;
 
-use crate::{Physics, PhysicsConfig, DebugMode, bounds::{aabb::Aabb, debug::{DebugBounds, DebugBoundsMesh}}};
+use crate::{Physics, PhysicsConfig, DebugMode, bounds::{aabb::Aabb, debug::{DebugBounds, DebugBoundsMesh}}, colliders::ColliderBox};
 use bevy::{prelude::*, ecs::schedule::ShouldRun};
 use bevy_polyline::*;
 pub use report::*;
@@ -13,20 +13,20 @@ impl Plugin for PhysicsDebugPlugin {
             //.init_resource::<PhysicsDebugRender>()
 
             .add_system_set_to_stage(
-                CoreStage::PreUpdate,
+                CoreStage::PostUpdate,
                 SystemSet::new()
                     .label(Physics::PostUpdate)
                     .with_system(report_system),
             )
             .add_system_set_to_stage(
-                CoreStage::PreUpdate,
+                CoreStage::PostUpdate,
                 SystemSet::new()
                     .label(Physics::PostUpdate)
                     .with_run_criteria(run_debug_bound)
                     .with_system(setup_debug_system)
                 )
                 .add_system_set_to_stage(
-                    CoreStage::PreUpdate,
+                    CoreStage::PostUpdate,
                     SystemSet::new()
                         .label(Physics::PostUpdate)
                         .with_run_criteria(run_debug_off)
@@ -73,12 +73,30 @@ fn run_debug_off(config: Res<PhysicsConfig>) -> ShouldRun {
 //     }
 // }
 
+#[derive(Component)]
+
+pub struct BoxDebugBounds;
+
 pub fn setup_debug_system(
     mut commands: Commands,
     query: Query<Entity, (With<Aabb>, Without<DebugBounds>)>,
+    box_query: Query<(Entity, &ColliderBox), Without<BoxDebugBounds>>,
+    mut meshes: ResMut<Assets<Mesh>>,
 ) {
     for e in query.iter() {
         commands.entity(e).insert(DebugBounds);
+    }
+
+    for (e, b) in box_query.iter() {
+        commands.entity(e)
+            .insert(BoxDebugBounds)
+            .with_children(|builder| {
+                builder.spawn_bundle(PbrBundle {
+                    mesh: meshes.add(Mesh::from(b)),
+                    ..Default::default()
+                })
+                .insert(Name::new("BoxDebugBounds"));
+            });
     }
 }
 

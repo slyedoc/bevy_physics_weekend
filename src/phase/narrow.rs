@@ -229,8 +229,8 @@ fn conservative_advancement(
     trans_b: &mut GlobalTransform,
     body_a: &mut Body,
     body_b: &mut Body,
-    collider_a: &dyn Collider,
-    collider_b: &dyn Collider,
+    collider_a: &impl Collider,
+    collider_b: &impl Collider,
     mut dt: f32,
 ) -> Option<Contact> {
     let mut toi = 0.0;
@@ -283,8 +283,8 @@ fn conservative_advancement(
             let mut ortho_speed = relative_velocity.dot(ab);
 
             // add to the ortho_speed the maximum angular speeds of the relative shapes
-            let angular_speed_a = collider_a.fastest_linear_speed(body_a.angular_velocity, ab);
-            let angular_speed_b = collider_b.fastest_linear_speed(body_b.angular_velocity, -ab);
+            let angular_speed_a = collider_a.fastest_linear_speed(body_a.angular_velocity, body_a.center_of_mass, ab);
+            let angular_speed_b = collider_b.fastest_linear_speed(body_b.angular_velocity, body_b.center_of_mass, -ab);
             ortho_speed += angular_speed_a + angular_speed_b;
 
             if ortho_speed <= 0.0 {

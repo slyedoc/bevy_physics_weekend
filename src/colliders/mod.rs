@@ -1,16 +1,13 @@
 use bevy::{
     math::{Mat3, Vec3},
-    prelude::{ Component, GlobalTransform},
+    prelude::{ Component, GlobalTransform, Mesh}, render::{mesh::Indices, render_resource::PrimitiveTopology},
 };
 
 use crate::bounds::Bounds;
 
 pub trait Collider {
-    fn center_of_mass(&self) -> Vec3;
-    //fn bounds(&self) -> Bounds;
-   // fn aabb(&self, transform: &GlobalTransform) -> Aabb;
     fn support(&self, dir: Vec3, transform: &GlobalTransform, bias: f32) -> Vec3;
-    fn fastest_linear_speed(&self, angular_velocity: Vec3, dir: Vec3) -> f32;
+    fn fastest_linear_speed(&self, angular_velocity: Vec3, center_of_mass: Vec3, dir: Vec3) -> f32;
     fn shape_type(&self) -> ColliderType;
 }
 
@@ -40,26 +37,12 @@ impl ColliderSphere {
 }
 
 impl Collider for ColliderSphere {
-    fn center_of_mass(&self) -> Vec3 {
-        self.center_of_mass
-    }
-
-    // fn bounds(&self) -> Bounds {
-    //     self.bounds
-    // }
-
-    // fn aabb(&self, trans: &GlobalTransform ) -> Aabb {
-    //     Aabb {
-    //         mins: self.bounds.mins + trans.translation,
-    //         maxs: self.bounds.maxs + trans.translation,
-    //     }
-    // }
 
     fn support(&self, dir: Vec3, transform: &GlobalTransform, bias: f32) -> Vec3 {
         transform.translation + dir * (self.radius + bias)
     }
 
-    fn fastest_linear_speed(&self, _angular_velocity: Vec3, _dir: Vec3) -> f32 {
+    fn fastest_linear_speed(&self, _angular_velocity: Vec3, _center_of_mass: Vec3, _dir: Vec3) -> f32 {
         0.0
     }
 
@@ -70,10 +53,8 @@ impl Collider for ColliderSphere {
 
 #[derive(Component)]
 pub struct ColliderBox {
-    bounds: Bounds,
-    points: Vec<Vec3>,
-    center_of_mass: Vec3,
-    inertia_tensor: Mat3,
+    pub bounds: Bounds,
+    pub points: Vec<Vec3>,
 }
 
 impl From<Vec3> for ColliderBox {
@@ -115,33 +96,9 @@ impl ColliderBox {
             maxs: Vec3::new(max_x, max_y, max_z),
         };
 
-        // inertia tensor for box centered around zero
-        let d = bounds.maxs - bounds.mins;
-
-        let dd = d * d;
-        let diagonal = Vec3::new(dd.y + dd.z, dd.x + dd.z, dd.x + dd.y) / 12.0;
-        let tensor = Mat3::from_diagonal(diagonal);
-
-        // now we need to use the parallel axis theorem to get the ineria tensor for a box that is
-        // not centered around the origin
-
-        let center_of_mass = (bounds.maxs + bounds.mins) * 0.5;
-
-        // the displacement from the center of mass to the origin
-        let r = -center_of_mass;
-        let r2 = r.length_squared();
-
-        let pat_tensor = Mat3::from_cols(
-            Vec3::new(r2 - r.x * r.x, r.x * r.y, r.x * r.z),
-            Vec3::new(r.y * r.x, r2 - r.y * r.y, r.y * r.z),
-            Vec3::new(r.z * r.x, r.z * r.y, r2 - r.z * r.z),
-        );
-
         Self {
             points,
             bounds,
-            center_of_mass,
-            inertia_tensor: tensor + pat_tensor,
         }
     }
 
@@ -182,19 +139,16 @@ impl ColliderBox {
 
 impl Collider for ColliderBox {
 
-    fn center_of_mass(&self) -> Vec3 {
-        self.center_of_mass
-    }
 
     // find the point in the furthest in direction
     fn support(&self, dir: Vec3, trans: &GlobalTransform, bias: f32) -> Vec3 {
         find_support_point(&self.points, dir, trans, bias)
     }
 
-    fn fastest_linear_speed(&self, angular_velocity: Vec3, dir: Vec3) -> f32 {
+    fn fastest_linear_speed(&self, angular_velocity: Vec3, center_of_mass: Vec3, dir: Vec3) -> f32 {
         let mut max_speed = 0.0;
         for pt in &self.points {
-            let r = *pt - self.center_of_mass;
+            let r = *pt - center_of_mass;
             let linear_velocity = angular_velocity.cross(r);
             let speed = dir.dot(linear_velocity);
             if speed > max_speed {
@@ -209,6 +163,45 @@ impl Collider for ColliderBox {
     }
 }
 
+
+impl From<&ColliderBox> for Mesh {
+    fn from(collider: &ColliderBox) -> Self {
+        /*
+              (2)-----(3)               Y
+               | \     | \              |
+               |  (1)-----(0) MAX       o---X
+               |   |   |   |             \
+          MIN (6)--|--(7)  |              Z
+                 \ |     \ |
+                  (5)-----(4)
+        */
+        let positions: Vec<[f32; 3]> = collider.points
+            .iter()
+            .map(|vert| [vert.x, vert.y, vert.z])
+            .collect();
+
+        let mut normals = Vec::with_capacity(8);
+        let mut uvs = Vec::with_capacity(8);
+
+        for _ in 0..8 {
+            normals.push([0.0, 0.0, 1.0]);
+            uvs.push([0.0, 0.0]);
+        }
+
+        let indices = Indices::U32(vec![
+            0, 1, 1, 2, 2, 3, 3, 0, // Top ring
+            4, 5, 5, 6, 6, 7, 7, 4, // Bottom ring
+            0, 4, 1, 5, 2, 6, 3, 7, // Verticals
+        ]);
+
+        let mut mesh = Mesh::new(PrimitiveTopology::LineList);
+        mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+        mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+        mesh.set_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+        mesh.set_indices(Some(indices));
+        mesh
+    }
+}
 
 fn find_support_point(points: &[Vec3], dir: Vec3, trans: &GlobalTransform, bias: f32) -> Vec3 {
     // find the point in the furthest in direction
