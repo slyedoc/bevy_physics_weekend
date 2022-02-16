@@ -53,7 +53,6 @@ impl Collider for ColliderSphere {
 
 #[derive(Component)]
 pub struct ColliderBox {
-    pub bounds: Bounds,
     pub points: Vec<Vec3>,
 }
 
@@ -91,14 +90,8 @@ impl ColliderBox {
             Vec3::new(max_x, min_y, max_z),
         ];
 
-        let bounds = Bounds {
-            mins: Vec3::new(min_x, min_y, min_z),
-            maxs: Vec3::new(max_x, max_y, max_z),
-        };
-
         Self {
-            points,
-            bounds,
+            points
         }
     }
 
@@ -138,7 +131,6 @@ impl ColliderBox {
 }
 
 impl Collider for ColliderBox {
-
 
     // find the point in the furthest in direction
     fn support(&self, dir: Vec3, trans: &GlobalTransform, bias: f32) -> Vec3 {

@@ -1,6 +1,9 @@
 #![allow(dead_code)]
+use crate::{
+    colliders::{Collider, Edge, Tri},
+    math::glam_ext::Mat4Ext,
+};
 use bevy::prelude::*;
-use crate::{math::glam_ext::Mat4Ext, colliders::{Collider, Tri, Edge}};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 struct Point {
@@ -19,18 +22,38 @@ impl Point {
     }
 }
 
-pub fn gjk_does_intersect(collider_a: &impl Collider, transform_a: &GlobalTransform, collider_b: &impl Collider, transform_b: &GlobalTransform, bias: f32) -> Option<(Vec3, Vec3)> {
+pub fn gjk_does_intersect(
+    collider_a: &impl Collider,
+    transform_a: &GlobalTransform,
+    collider_b: &impl Collider,
+    transform_b: &GlobalTransform,
+    bias: f32,
+) -> Option<(Vec3, Vec3)> {
     const ORIGIN: Vec3 = Vec3::ZERO;
 
     let mut num_pts = 1;
     let mut simplex_points = [Point::new(); 4];
-    simplex_points[0] = support(collider_a, transform_a, collider_b, transform_b, Vec3::ONE, 0.0);
+    simplex_points[0] = support(
+        collider_a,
+        transform_a,
+        collider_b,
+        transform_b,
+        Vec3::ONE,
+        0.0,
+    );
 
     let mut closest_dist = f32::MAX;
     let mut new_dir = -simplex_points[0].xyz;
     loop {
         // Get the new point to check on
-        let new_pt = support(collider_a, transform_a, collider_b, transform_b, new_dir, 0.0);
+        let new_pt = support(
+            collider_a,
+            transform_a,
+            collider_b,
+            transform_b,
+            new_dir,
+            0.0,
+        );
         if simplex_has_point(&simplex_points, &new_pt) {
             break;
         }
@@ -68,7 +91,14 @@ pub fn gjk_does_intersect(collider_a: &impl Collider, transform_a: &GlobalTransf
     // Check that we have a 3-simplex (EPA expects a tetrahedron)
     if num_pts == 1 {
         let search_dir = -simplex_points[0].xyz;
-        let new_pt = support(collider_a, transform_a, collider_b, transform_b, search_dir, 0.0);
+        let new_pt = support(
+            collider_a,
+            transform_a,
+            collider_b,
+            transform_b,
+            search_dir,
+            0.0,
+        );
         simplex_points[num_pts] = new_pt;
         num_pts += 1;
     }
@@ -82,7 +112,14 @@ pub fn gjk_does_intersect(collider_a: &impl Collider, transform_a: &GlobalTransf
         };
 
         let new_dir = u;
-        let new_pt = support(collider_a, transform_a, collider_b, transform_b, new_dir, 0.0);
+        let new_pt = support(
+            collider_a,
+            transform_a,
+            collider_b,
+            transform_b,
+            new_dir,
+            0.0,
+        );
         simplex_points[num_pts] = new_pt;
         num_pts += 1;
     }
@@ -93,7 +130,14 @@ pub fn gjk_does_intersect(collider_a: &impl Collider, transform_a: &GlobalTransf
         let norm = ab.cross(ac);
 
         let new_dir = norm;
-        let new_pt = support(collider_a, transform_a, collider_b,transform_b, new_dir, 0.0);
+        let new_pt = support(
+            collider_a,
+            transform_a,
+            collider_b,
+            transform_b,
+            new_dir,
+            0.0,
+        );
         simplex_points[num_pts] = new_pt;
         num_pts += 1;
     }
@@ -116,24 +160,49 @@ pub fn gjk_does_intersect(collider_a: &impl Collider, transform_a: &GlobalTransf
     }
 
     // Perform EPA expansion of the simplex to find the closest face on the CSO
-    Some(epa_expand(collider_a, transform_a, collider_b, transform_b, bias, &simplex_points))
+    Some(epa_expand(
+        collider_a,
+        transform_a,
+        collider_b,
+        transform_b,
+        bias,
+        &simplex_points,
+    ))
 }
 
-
-pub fn gjk_closest_points(collider_a: &impl Collider, transform_a: &GlobalTransform, collider_b: &impl Collider, transform_b: &GlobalTransform) -> (Vec3, Vec3) {
+pub fn gjk_closest_points(
+    collider_a: &impl Collider,
+    transform_a: &GlobalTransform,
+    collider_b: &impl Collider,
+    transform_b: &GlobalTransform,
+) -> (Vec3, Vec3) {
     let mut closest_dist = f32::MAX;
     const BIAS: f32 = 0.01;
 
     let mut num_pts = 1;
 
     let mut simplex_points = [Point::new(); 4];
-    simplex_points[0] = support(collider_a, transform_a, collider_b, transform_b, Vec3::ONE, BIAS);
+    simplex_points[0] = support(
+        collider_a,
+        transform_a,
+        collider_b,
+        transform_b,
+        Vec3::ONE,
+        BIAS,
+    );
 
     let mut lambdas = Vec4::new(1.0, 0.0, 0.0, 0.0);
     let mut new_dir = -simplex_points[0].xyz;
     loop {
         // get the new point to check on
-        let new_pt = support(collider_a, transform_a, collider_b, transform_b, new_dir, BIAS);
+        let new_pt = support(
+            collider_a,
+            transform_a,
+            collider_b,
+            transform_b,
+            new_dir,
+            BIAS,
+        );
 
         // if the new point is the same as the previous point then we can't expand any further
         if simplex_has_point(&simplex_points, &new_pt) {
@@ -346,18 +415,23 @@ fn signed_volume_3d(s1: Vec3, s2: Vec3, s3: Vec3, s4: Vec3) -> Vec4 {
     }
 }
 
-fn support(collider_a: &impl Collider, transform_a: &GlobalTransform, collider_b: &impl Collider, transform_b: &GlobalTransform, dir: Vec3, bias: f32) -> Point {
+fn support(
+    collider_a: &impl Collider,
+    transform_a: &GlobalTransform,
+    collider_b: &impl Collider,
+    transform_b: &GlobalTransform,
+    dir: Vec3,
+    bias: f32,
+) -> Point {
     let dir = dir.normalize();
 
     // Find the point in A furthest direction
-    let pt_a = collider_a
-        .support(dir, transform_a, bias);
+    let pt_a = collider_a.support(dir, transform_a, bias);
 
     let dir = -dir;
 
     // Find the point in B furthest direction
-    let pt_b = collider_b
-        .support(dir, transform_b, bias);
+    let pt_b = collider_b.support(dir, transform_b, bias);
 
     // Return the point in the minkowski sum, furthest in the direction
     Point {
@@ -430,7 +504,6 @@ fn sort_valids(simplex_points: &mut [Point; 4], lambdas: &mut Vec4) {
         if lambdas[i] == 0.0 {
             valids[i] = false;
         }
-
     }
 
     let mut valid_lambdas = Vec4::ZERO;
@@ -502,7 +575,14 @@ fn epa_expand(
         let tri = closest_triangle(&triangles, &points).unwrap();
         let normal = normal_direction(&tri, &points);
 
-        let new_pt = support(collider_a, transform_a, collider_b, transform_b, normal, bias);
+        let new_pt = support(
+            collider_a,
+            transform_a,
+            collider_b,
+            transform_b,
+            normal,
+            bias,
+        );
 
         // if w already exists then just stop because it means we can't expand any further
         if triangle_has_point(new_pt.xyz, &triangles, &points) {
@@ -526,7 +606,7 @@ fn epa_expand(
 
         // Find dangling edges
         // TODO: Test reusing Vec<Edge>
-        let dangling_edges = find_dangling_edges( &triangles);
+        let dangling_edges = find_dangling_edges(&triangles);
         if dangling_edges.is_empty() {
             break;
         }
@@ -550,7 +630,7 @@ fn epa_expand(
         }
     }
 
-   // Get the projection of the origin on the closest triangle
+    // Get the projection of the origin on the closest triangle
     let tri_option = closest_triangle(&triangles, &points);
     if tri_option.is_none() {
         // This should never happen
@@ -644,7 +724,6 @@ fn signed_distance_to_triangle(tri: &Tri, pt: Vec3, points: &[Point]) -> f32 {
     normal.dot(a2pt)
 }
 
-
 fn remove_triangles_facing_point(pt: Vec3, triangles: &mut Vec<Tri>, points: &[Point]) -> usize {
     let mut num_removed = 0;
     let mut i = 0;
@@ -662,8 +741,8 @@ fn remove_triangles_facing_point(pt: Vec3, triangles: &mut Vec<Tri>, points: &[P
     num_removed
 }
 
-fn find_dangling_edges( triangles: &[Tri]) -> Vec<Edge> {
-    let mut dangling_edges =  Vec::new();
+fn find_dangling_edges(triangles: &[Tri]) -> Vec<Edge> {
+    let mut dangling_edges = Vec::new();
     for (i, tri) in triangles.iter().enumerate() {
         let edges = [
             Edge { a: tri.a, b: tri.b },
@@ -777,4 +856,77 @@ fn barycentric_coordinates(s1: Vec3, s2: Vec3, s3: Vec3, pt: Vec3) -> Vec3 {
     }
 
     lambdas
+}
+
+fn test_points() -> Vec<Vec3> {
+    vec![
+        Vec3::new(0.0, 0.0, 0.0),
+        Vec3::new(1.0, 0.0, 0.0),
+        Vec3::new(0.0, 1.0, 0.0),
+        Vec3::new(0.0, 0.0, 1.0),
+    ]
+}
+
+#[test]
+fn test_signed_volume_3d_a() {
+        let pts= test_points().iter().map(|p|
+        *p + Vec3::new(1.0, 1.0, 1.0)
+    ).collect();
+    let (lambdas, v) = test_volume_3d(pts);
+    assert_eq!(lambdas, Vec4::new(1.0, 0.0, 0.0, 0.0));
+    assert_eq!(v, Vec3::new(1.0, 1.0, 1.0));
+}
+
+#[test]
+fn test_signed_volume_3d_b() {
+    let pts= test_points().iter().map(|p|
+        *p + Vec3::new(-1.0, -1.0, -1.0) * 0.25
+    ).collect();
+    let (lambdas, v) = test_volume_3d(pts);
+    assert_eq!(lambdas, Vec4::new(0.250, 0.250, 0.250, 0.250));
+    assert_eq!(v, Vec3::new(0.0, 0.0, 0.0));
+}
+
+// #[test]
+// fn test_signed_volume_3d_d() {
+//     let pts= test_points().iter().map(|p|
+//         *p + Vec3::new(-1.0, -1.0, -1.0)
+//     ).collect();
+//     let (lambdas, v) = test_volume_3d(pts);
+//     assert_eq!(lambdas, Vec4::new(0.0, 1.0/3.0, 1.0/3.0, 1.0/3.0));
+//     assert_eq!(v, Vec3::new(-2.0/3.0, -2.0/3.0, -2.0/3.0));
+// } 
+
+#[test]
+fn test_signed_volume_3d_e() {
+    let pts= test_points().iter().map(|p|
+        *p + Vec3::new(1.0, 1.0, -0.5)
+    ).collect();
+    let (lambdas, v) = test_volume_3d(pts);
+    assert_eq!(lambdas, Vec4::new(0.5, 0.0, 0.0, 0.5));
+    assert_eq!(v, Vec3::new(1.0, 1.0, 0.0));
+}
+
+// #[test]
+// #[allow(clippy::excessive_precision)]
+// fn test_signed_volume_3d_f() {
+//     let pts= vec![
+//         Vec3::new(51.1996613f32, 26.1989613f32, 1.91339576f32),
+//         Vec3::new(-51.0567360f32, -26.0565681f32, -0.43613428f32),
+//         Vec3::new(50.8978920f32, -24.1035538f32, -1.04042661f32),
+//         Vec3::new(-49.1021080f32, 25.896644462f32,-1.04042661f32),
+//     ];
+    
+//     let (lambdas, v) = test_volume_3d(pts);
+//     assert_eq!(lambdas, Vec4::new(0.29040048, 0.30222988, 0.20665173, 0.20171797));
+//     assert_eq!(v, Vec3::new(0.0, 0.0, 0.0));
+// }
+
+fn test_volume_3d(pts: Vec<Vec3>) -> (Vec4, Vec3) {
+    let lambdas = signed_volume_3d(pts[0], pts[1], pts[2], pts[3]);
+    let mut v = Vec3::ZERO;
+    for i in 0..4 {
+        v += pts[i] * lambdas[i];
+    }
+    (lambdas, v)
 }

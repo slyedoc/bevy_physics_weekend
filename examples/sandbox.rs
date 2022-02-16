@@ -80,14 +80,17 @@ fn setup_level(
                 friction: 0.5,
                 ..Default::default()
             })
-            //.insert(Bounded::<aabb::Aabb>::default())
             .insert(ColliderBox::from(Vec3::ONE))
             .insert(helper::Reset)
             .insert(Name::new("Box"));
 
         commands
             .spawn_bundle(PbrBundle {
-                transform: Transform::from_xyz(0.0, 3.0, -5.0),
+                transform: Transform {
+                    translation: Vec3::new(4.0, 3.0, -5.0),
+                    rotation: Quat::from_euler(EulerRot::XYZ, 1.0, 1.0, 0.0),
+                    ..Default::default()
+                },
                 mesh: meshes.add(shape_box.into()),
                 material: materials.add(StandardMaterial {
                     base_color: Color::rgba(1.0, 1.0, 1.0, 0.5),

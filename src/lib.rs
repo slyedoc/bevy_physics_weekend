@@ -13,7 +13,7 @@ mod math;
 mod phase;
 pub mod primitives;
 
-use bounds::{*, aabb::Aabb};
+use bounds::{aabb::Aabb, *};
 use colliders::{Collider, ColliderBox, ColliderSphere};
 use primitives::*;
 
@@ -64,6 +64,7 @@ impl Default for PhysicsConfig {
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, SystemLabel)]
 pub enum Physics {
+    First,
     PreUpdate,
     Update,
     PostUpdate,
@@ -89,28 +90,38 @@ pub enum Update {
     Transform,
 }
 
+pub struct StepOnceEvent;
+
 pub struct PhysicsPlugin;
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .init_resource::<PhysicsConfig>()
+        app.init_resource::<PhysicsConfig>()
             .init_resource::<PhysicsTime>()
             .add_event::<Contact>()
             .add_event::<BroadContact>()
             .add_event::<ManifoldContactEvent>()
+            .add_event::<StepOnceEvent>()
+            // TODO: right now this uses the mesh instead of the collider
+            .add_plugin(BoundingVolumePlugin::<aabb::Aabb>::default())
+            .add_system_set_to_stage(
+                CoreStage::PostUpdate,
+                SystemSet::new()
+                    .label(Physics::First)
+                    .with_run_criteria(run_disabled_physics)
+                    .with_system(steponce_pre_system),
+            )
             .add_system_set_to_stage(
                 CoreStage::PostUpdate,
                 SystemSet::new()
                     .label(Physics::PreUpdate)
+                    .after(Physics::First)
                     .after(TransformSystem::TransformPropagate)
+                    .after(BoundingSystem::UpdateBounds)
                     .with_run_criteria(run_physics)
                     .with_system(update_time_system)
                     .with_system(spawn_sphere.label(PreUpdate::First))
-                    .with_system(spawn_box.label(PreUpdate::First))
-                    //.with_system(update_aabb.after(BoundingSystem::UpdateBounds)),
+                    .with_system(spawn_box.label(PreUpdate::First)), //.with_system(update_aabb),
             )
-            // TODO: right now this uses the mesh instead of the collider
-            .add_plugin(BoundingVolumePlugin::<aabb::Aabb>::default())
             .add_system_set_to_stage(
                 CoreStage::PostUpdate,
                 SystemSet::new()
@@ -127,7 +138,7 @@ impl Plugin for PhysicsPlugin {
                     // they part of diffferent set since they use different run_criteria
                     .with_system(
                         //resolve_contact::resolve_contact_system_ordered
-                            resolve_contact::resolve_contact_system
+                        resolve_contact::resolve_contact_system
                             .label(Update::ResolveContact)
                             .after(Update::Narrowphase),
                     )
@@ -145,15 +156,13 @@ impl Plugin for PhysicsPlugin {
                         transform::update_local_tranform
                             .label(Update::Transform)
                             .after(Update::ConstraintsSolve),
-                    )
-                    // .add_system_set_to_stage(
-                    //     CoreStage::PreUpdate,
-                    //     SystemSet::new()
-                    //         .label(Physics::PostUpdate)
-                    //         .with_run_criteria(run_physics)
-                    //         .with_system(manifold_remove_expired_system),
-                    // );
-
+                    ), // .add_system_set_to_stage(
+                       //     CoreStage::PreUpdate,
+                       //     SystemSet::new()
+                       //         .label(Physics::PostUpdate)
+                       //         .with_run_criteria(run_physics)
+                       //         .with_system(manifold_remove_expired_system),
+                       // );
             )
             //TODO: Wish i could use run criteria on sub systems, but its not allowed
             // Static Collision Detection
@@ -183,6 +192,14 @@ impl Plugin for PhysicsPlugin {
                             .label(Update::Narrowphase)
                             .after(Update::Broadphase),
                     ),
+            )
+            .add_system_set_to_stage(
+                CoreStage::PostUpdate,
+                SystemSet::new()
+                    .label(Physics::PostUpdate)
+                    .after(Physics::Update)
+                    .with_run_criteria(run_physics)
+                    .with_system(steponce_post_system),
             );
     }
 }
@@ -198,7 +215,8 @@ pub fn spawn_sphere(
             .insert(Bounded::<Aabb>::default());
 
         body.center_of_mass = Vec3::ZERO;
-        body.inertia_tensor = Mat3::from_diagonal(Vec3::splat(2.0 * sphere.radius * sphere.radius / 5.0))
+        body.inertia_tensor =
+            Mat3::from_diagonal(Vec3::splat(2.0 * sphere.radius * sphere.radius / 5.0))
     }
 }
 
@@ -212,53 +230,53 @@ pub fn spawn_box(
             .insert(b.shape_type())
             .insert(Bounded::<Aabb>::default());
 
-    
-            // inertia tensor for box centered around zero
-            let d = b.bounds.maxs - b.bounds.mins;
-    
-            let dd = d * d;
-            let diagonal = Vec3::new(dd.y + dd.z, dd.x + dd.z, dd.x + dd.y) / 12.0;
-            let tensor = Mat3::from_diagonal(diagonal);
-    
-            // now we need to use the parallel axis theorem to get the ineria tensor for a box that is
-            // not centered around the origin
-    
-            let center_of_mass = (b.bounds.maxs + b.bounds.mins) * 0.5;
-    
-            // the displacement from the center of mass to the origin
-            let r = -center_of_mass;
-            let r2 = r.length_squared();
-    
-            let pat_tensor = Mat3::from_cols(
-                Vec3::new(r2 - r.x * r.x, r.x * r.y, r.x * r.z),
-                Vec3::new(r.y * r.x, r2 - r.y * r.y, r.y * r.z),
-                Vec3::new(r.z * r.x, r.z * r.y, r2 - r.z * r.z),
-            );
+        // inertia tensor for box centered around zero
+        let aabb = Aabb::compute_aabb(&b.points);
+        let d = aabb.maximums() - aabb.minimums();
 
-            body.center_of_mass = center_of_mass;
-            body.inertia_tensor = tensor + pat_tensor
+        let dd = d * d;
+        let diagonal = Vec3::new(dd.y + dd.z, dd.x + dd.z, dd.x + dd.y) / 12.0;
+        let tensor = Mat3::from_diagonal(diagonal);
+
+        // now we need to use the parallel axis theorem to get the ineria tensor for a box that is
+        // not centered around the origin
+        body.center_of_mass = (aabb.maximums + aabb.minimums) * 0.5;
+
+        // the displacement from the center of mass to the origin
+        let r = -body.center_of_mass;
+        let r2 = r.length_squared();
+
+        let pat_tensor = Mat3::from_cols(
+            Vec3::new(r2 - r.x * r.x, r.x * r.y, r.x * r.z),
+            Vec3::new(r.y * r.x, r2 - r.y * r.y, r.y * r.z),
+            Vec3::new(r.z * r.x, r.z * r.y, r2 - r.z * r.z),
+        );
+        body.inertia_tensor = tensor + pat_tensor
     }
 }
 
-
-pub fn update_aabb(
-     mut query: Query<(&Body, &mut Aabb)>,
-     pt: Res<PhysicsTime>,
-) {
+pub fn update_aabb(mut query: Query<(&Body, &mut Aabb)>, pt: Res<PhysicsTime>) {
     for (body, mut aabb) in query.iter_mut() {
         // expand the bounds by the linear velocity
         aabb.expand_velocity(body.linear_velocity * pt.time);
         const BOUNDS_EPS: f32 = 0.01;
-        aabb.expand_velocity(Vec3::splat(BOUNDS_EPS));    
+        aabb.expand_velocity(Vec3::splat(BOUNDS_EPS));
     }
 }
-
 
 fn run_physics(config: Res<PhysicsConfig>) -> ShouldRun {
     if config.time_dilation != 0.0 && config.enabled {
         ShouldRun::Yes
     } else {
         ShouldRun::No
+    }
+}
+
+fn run_disabled_physics(config: Res<PhysicsConfig>) -> ShouldRun {
+    if config.time_dilation != 0.0 && config.enabled {
+        ShouldRun::No
+    } else {
+        ShouldRun::Yes
     }
 }
 
@@ -281,5 +299,24 @@ fn run_dynamic(config: Res<PhysicsConfig>) -> ShouldRun {
 fn update_time_system(time: Res<Time>, config: Res<PhysicsConfig>, mut pt: ResMut<PhysicsTime>) {
     // NOTE: I am avoiding using fixed time, thats because
     // we want to develop the hot path of the physics system
-    pt.time =  (time.delta_seconds() * config.time_dilation).clamp(0.0, 0.05);
+    pt.time = (time.delta_seconds() * config.time_dilation).clamp(0.0, 0.1);
+}
+
+pub fn steponce_pre_system(
+    mut step_ev: EventReader<StepOnceEvent>,
+    mut config: ResMut<PhysicsConfig>,
+) {
+    for _ in step_ev.iter() {
+        info!("here");
+        config.enabled = true;
+    }
+}
+
+pub fn steponce_post_system(
+    mut step_ev: EventReader<StepOnceEvent>,
+    mut config: ResMut<PhysicsConfig>,
+) {
+    if step_ev.iter().count() > 0 {
+        config.enabled = false;
+    }
 }
